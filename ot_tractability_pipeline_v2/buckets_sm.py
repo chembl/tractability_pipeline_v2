@@ -1,0 +1,565 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  3 10:38:51 2020
+
+@author: Melanie Schneider
+"""
+# import io
+# import re
+import json
+import sys
+import time
+# import zipfile
+# import argparse
+# import datetime
+import os
+
+# import mygene
+import numpy as np
+import pandas as pd
+from pandas.io.json import json_normalize
+import pkg_resources
+# from sqlalchemy import create_engine
+
+PY3 = sys.version > '3'
+if PY3:
+    import urllib.request as urllib2
+else:
+    import urllib2
+
+
+from ot_tractability_pipeline_v2.queries_sm import *
+
+DATA_PATH = pkg_resources.resource_filename('ot_tractability_pipeline_v2', 'data/')
+
+
+class Small_molecule_buckets(object):
+    '''
+    Class for assigning genes to tractability buckets
+    '''
+
+    ##############################################################################################################
+    #
+    # Initial setup
+    #
+    #
+    ##############################################################################################################
+
+    def __init__(self, Pipeline_setup, database_url=None, ligand_filter=list()):
+
+        # Cross referencing from Pipeline_setup, prevents repetition for antibody ot_tractability_pipeline
+        self.store_fetched = Pipeline_setup.store_fetched
+
+        # list of ensembl IDs for targets to be considered
+        self.gene_list = Pipeline_setup.gene_list
+
+        # id_xref dataframe
+        self.id_xref = Pipeline_setup.id_xref
+
+        # ChEMBL DB connection
+        self.engine = Pipeline_setup.engine
+
+        # All chembl data loaded into here
+        self.all_chembl_targets = None
+
+        # Unique list of PDB codes:
+        self.pdb_list = []
+
+        # Map back to Uniprot accession
+        self.pdb_map = {}
+        self.acc_map = {}
+
+        # URL for PDBe web services
+        self.PDB_SERVER_URL = "https://www.ebi.ac.uk/pdbe/api"
+
+        # Load lists for PDB ligand filters (i.e. to remove sugars, solvents etc)
+        self.ligand_filter = ligand_filter
+
+        if len(ligand_filter) == 0:
+            # Default ligand filter
+            # Load unwanted PDB ligands list from text files
+
+            with open(os.path.join(DATA_PATH, 'organic_solvents.txt')) as solvent_file:
+                solvents = [a.split('\t')[0] for a in solvent_file]
+
+            with open(os.path.join(DATA_PATH, 'sugars.txt')) as sugar_file:
+                sugars = [a.split('\t')[0] for a in sugar_file]
+
+            with open(os.path.join(DATA_PATH, 'cofactors.txt')) as cofactor_file:
+                cofactors = [a.split('\t')[0] for a in cofactor_file]
+
+            with open(os.path.join(DATA_PATH, 'additives.txt')) as additives_file:
+                additives = [a.split('\t')[0] for a in additives_file]
+
+            ligand_filter = solvents + sugars + cofactors + additives
+
+            self.ligand_filter = ligand_filter
+
+
+    ##############################################################################################################
+    #
+    # Functions relating to buckets 1-3
+    # Clinical Compounds
+    #
+    ##############################################################################################################
+
+    def _search_chembl_clinical(self):
+        '''
+        Search for all targets in ChEMBL, returning data required for buckets 1-3
+        :return:
+        '''
+
+        small_mol_info = pd.read_sql_query(chembl_clinical_small_mol, self.engine)
+        self.all_chembl_targets = pd.read_sql_query(chembl_clinical_targets, self.engine)
+        self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')
+
+        if self.store_fetched: 
+            self.all_chembl_targets.to_csv("{}/sm_all_chembl_targets.csv".format(self.store_fetched))
+
+    def _process_protein_complexes(self):
+        '''
+        For protein complexes, see if we know the binding subunit, and only keep these
+
+        :return:
+        '''
+
+        pc = self.all_chembl_targets[self.all_chembl_targets['target_type'].str.contains("PROTEIN COMPLEX")]
+        not_pc = self.all_chembl_targets[~self.all_chembl_targets['target_type'].str.contains("PROTEIN COMPLEX")]
+
+        n = 1000
+        targets = pc['tid'].unique()
+        chunks = [targets[i:i + n] for i in range(0, len(targets), n)]
+
+        df_list = []
+
+        # Check if binding sites are defined
+        for chunk in chunks:
+            q = '''
+            select distinct bs.site_id, td.tid 
+            from {0}.target_dictionary td, {0}.binding_sites bs
+            where td.tid = bs.tid and td.tid IN {1}
+            
+            '''.format(CHEMBL_VERSION, tuple(chunk))
+            df_list.append(pd.read_sql_query(q, self.engine))
+
+        # Merge will set those with unknown binding site as NAN
+        binding_site_info = pd.concat(df_list, sort=False)
+
+        if self.store_fetched: 
+            binding_site_info.to_csv("{}/sm_chembl_binding_site_info.csv".format(self.store_fetched))
+
+        pc = pc.merge(binding_site_info, how='left', on='tid')
+        defined = pc[pc['site_id'].notnull()]
+        undefined = pc[~pc['site_id'].notnull()]
+
+        # if binding site is defined, only take the subunits that are involved in the binding
+
+        n = 1000
+        targets = defined['accession'].unique()
+        chunks = [targets[i:i + n] for i in range(0, len(targets), n)]
+        df_list2 = []
+
+        for chunk in chunks:
+            q2 = '''
+            select distinct sc.component_id, cs.accession
+            from {0}.component_sequences cs, {0}.site_components sc
+            where cs.component_id = sc.component_id
+            and cs.accession in {1}'''.format(CHEMBL_VERSION, tuple(chunk))
+            df_list2.append(pd.read_sql_query(q2, self.engine))
+
+        binding_subunit = pd.concat(df_list2, sort=False)
+
+        if self.store_fetched: 
+            binding_subunit.to_csv("{}/sm_chembl_binding_subunit.csv".format(self.store_fetched))
+
+        temp_pc = pc.merge(binding_subunit, on='accession')
+        binding_subunits = temp_pc[temp_pc['component_id'].notnull()]
+
+        self.all_chembl_targets = pd.concat([binding_subunits, undefined, not_pc], sort=False)
+
+    def _assess_clinical(self):
+        '''
+        Merge the results of the ChEMBL search with the OT data (right join, to keep all OT targets)
+
+        Group activity data by target, assign the Max Phase for each targets, and use it to assign buckets 1 to 3
+
+        '''
+
+        def other_func(x):
+            return tuple(set(x))
+
+        print(self.id_xref['symbol'])
+        self._search_chembl_clinical()
+        self._process_protein_complexes()
+
+        self.gene_xref = self.id_xref[['accession', 'ensembl_gene_id', 'symbol']]
+
+        self.out_df = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
+
+        self.clinical_evidence = self.out_df
+
+        self.clinical_evidence.to_csv("{}/sm_clinical_evidence.csv".format(self.store_fetched), index=False)
+
+        self.out_df.drop(['component_id', 'drug_name', 'ref_id', 'ref_type', 'tid', 'molregno',
+                          'parent_molregno', 'ref_url'], axis=1, inplace=True)
+
+        f = {x: 'first' for x in self.out_df.columns}
+        f['max_phase'] = 'max'
+        f['pref_name'] = other_func
+        f['moa_chembl'] = other_func
+
+        self.out_df = self.out_df.groupby(['ensembl_gene_id']).agg(f).reset_index(drop=True)
+
+        self.out_df['Bucket_1'] = 0
+        self.out_df['Bucket_2'] = 0
+        self.out_df['Bucket_3'] = 0
+
+        self.out_df.loc[(self.out_df['max_phase'] == 4), 'Bucket_1'] = 1
+        self.out_df.loc[(self.out_df['max_phase'] < 4) & (self.out_df['max_phase'] >= 2), 'Bucket_2'] = 1
+        self.out_df.loc[(self.out_df['max_phase'] < 2) & (self.out_df['max_phase'] > 0), 'Bucket_3'] = 1
+
+        print(self.out_df['symbol'])
+
+    ##############################################################################################################
+    #
+    # Functions relating to bucket 4
+    # PDB
+    #
+    ##############################################################################################################
+
+    def _make_request(self, url, data):
+        request = urllib2.Request(url)
+
+        try:
+            url_file = urllib2.urlopen(request, data)
+        except urllib2.HTTPError as e:
+            if e.code == 404:
+                print("[NOTFOUND %d] %s" % (e.code, url))
+            else:
+                print("[ERROR %d] %s" % (e.code, url))
+
+            return None
+
+        return url_file.read().decode()
+
+    def _post_request(self, url, data, pretty=False):
+        full_url = "%s/%s/?pretty=%s" % (self.PDB_SERVER_URL, url, str(pretty).lower())
+
+        if isinstance(data, (list, tuple)):
+            data = ",".join(data)
+
+        return self._make_request(full_url, data.encode())
+
+    def _pdb_list(self, s):
+
+        pdb = s['pdb']
+        acc = s['accession']
+
+        if not isinstance(pdb, list): pdb = [pdb]
+
+        # Python 2/3 compatability
+        try: pdb = [p.lower() for p in pdb if isinstance(p,(str,unicode))] #Python 2
+        except: pdb = [p.lower() for p in pdb if isinstance(p,str)] #Python 3
+
+        self.pdb_list += pdb
+        for p in pdb:
+            try: self.pdb_map[p].add(acc)
+            except KeyError: self.pdb_map[p] = {acc}
+            
+            try: self.acc_map[acc].append(p)
+            except KeyError: self.acc_map[acc] = [p]
+
+        self.pdb_list = list(set(self.pdb_list))
+
+    def _has_ligands(self, ligand_li):
+
+        ligands = [l['chem_comp_id'] for l in ligand_li if l['chem_comp_id'] not in self.ligand_filter
+                   and 'ION' not in l['chem_comp_name']]
+
+        if len(ligands) > 0:
+            return True
+        else:
+            return False
+
+    def _pdb_ligand_info(self):
+        '''
+        Use PDBe webservices to get ligand information. POST requests allow up to 1000 PDBs to be submitted each request
+        :return:
+        '''
+
+        self.id_xref.apply(self._pdb_list, axis=1)
+
+        # Fails with n=1000, runs with n=750
+        n = 750
+        chunks = [self.pdb_list[i:i + n] for i in range(0, len(self.pdb_list), n)]
+
+        self.no_ligands = []
+        self.good_ligands = []
+        self.bad_ligands = []
+
+        all_results = {}
+        for chunk in chunks:
+            ligand_url = '/pdb/entry/ligand_monomers'
+
+            data = ','.join(chunk)
+
+            results = json.loads(self._post_request(ligand_url, data, False))
+            all_results.update(results)
+            # PDBs without ligands are not returned
+            chunk_no_ligand = [p for p in chunk if p not in results.keys()]
+
+            # Separate PDBs that do or don't contain suitable ligands
+            chunk_good_ligand = [p for p in results.keys() if self._has_ligands(results[p])]
+            chunk_bad_ligand = [p for p in results.keys() if not self._has_ligands(results[p])]
+
+            # Add chunk info
+
+            self.no_ligands += chunk_no_ligand
+            self.good_ligands += chunk_good_ligand
+            self.bad_ligands += chunk_bad_ligand
+
+            time.sleep(1.5)
+
+        if self.store_fetched: 
+            json.dump(all_results, open("{}/sm_pdb_ligand_info.json".format(self.store_fetched), 'wt'))
+
+
+    def _known_pdb_ligand(self, s):
+
+        if s in self.acc_known_lig:
+            return list(set([p for p in self.acc_map[s] if p in self.good_ligands]))
+        else:
+            return np.nan
+
+    def _assess_pdb(self):
+        '''
+        Does the target have a ligand-bound protein crystal structure?
+        '''
+
+        # Download ligand info from pdb
+        self._pdb_ligand_info()
+
+        # Accession numbers with PDB ligand
+        self.acc_known_lig = list({c for pdb in self.good_ligands for c in self.pdb_map[pdb]})
+
+        self.out_df['PDB_Known_Ligand'] = self.out_df['accession'].apply(self._known_pdb_ligand)
+
+        self.out_df['Bucket_4'] = 0
+
+        self.out_df.loc[(self.out_df['PDB_Known_Ligand'].notna()), 'Bucket_4'] = 1
+
+    ##############################################################################################################
+    #
+    # Functions relating to buckets 5-6
+    # DrugEBIlity
+    #
+    ##############################################################################################################
+
+    def _assess_pockets(self):
+        '''
+        Does the target have a DrugEBIlity ensemble score >=0.7 (bucket 5) or  0<score<0.7 (bucket 6)
+        '''
+        df = pd.read_csv(os.path.join(DATA_PATH, 'drugebility_scores.csv'))
+
+        df = df.merge(self.gene_xref, on='accession', how='right')
+        print(df.dtypes)
+        df = df.groupby('ensembl_gene_id', as_index=False).max(numeric_only=True)
+        df['ensemble'].fillna(-1, inplace=True)
+
+        self.out_df = df.merge(self.out_df, how='right', on='ensembl_gene_id', suffixes=['_drop', ''])
+        self.out_df['Bucket_5'] = 0
+        self.out_df['Bucket_6'] = 0
+
+        self.out_df.loc[(self.out_df['ensemble'] >= 0.7), 'Bucket_5'] = 1
+        self.out_df.loc[(self.out_df['ensemble'] > 0) & (self.out_df['ensemble'] < 0.7), 'Bucket_6'] = 1
+
+    ##############################################################################################################
+    #
+    # Functions relating to bucket 7
+    # ChEBML
+    #
+    ##############################################################################################################
+
+    def _search_chembl(self):
+
+        self.activities = pd.concat([pd.read_sql_query(pchembl_q, self.engine),
+                                     pd.read_sql_query(nm_q, self.engine),
+                                     pd.read_sql_query(km_kon_q, self.engine),
+                                     pd.read_sql_query(D_Tm_q, self.engine),
+                                     pd.read_sql_query(residual_act_q, self.engine),
+                                     pd.read_sql_query(Imax_q, self.engine),
+                                     pd.read_sql_query(Emax_q, self.engine)], sort=False)
+
+        if self.store_fetched: 
+            self.activities.to_csv("{}/sm_chembl_activities.csv".format(self.store_fetched))
+
+        # For faster testing
+        # self.activities = pd.read_sql_query(pchembl_q, self.engine)
+
+    def _structural_alerts(self):
+        q = '''
+        select distinct cs.canonical_smiles, csa.alert_id /*, sa.alert_name, sas.set_name */
+        from {0}.compound_structures cs,
+            {0}.compound_structural_alerts csa,
+            {0}.structural_alerts sa,
+            {0}.molecule_dictionary md,
+            {0}.structural_alert_sets sas
+        where cs.molregno = md.molregno
+        and cs.molregno = csa.molregno
+        and csa.alert_id = sa.alert_id
+        and sa.alert_set_id = 1
+        and sa.alert_set_id = sas.alert_set_id
+        '''.format(CHEMBL_VERSION)
+
+        alerts = pd.read_sql_query(q, self.engine)
+
+        if self.store_fetched: 
+            alerts.to_csv("{}/sm_chembl_alerts.csv".format(self.store_fetched))
+
+        alerts = alerts.groupby('canonical_smiles', as_index=False).count()
+
+        return alerts
+
+    def _calc_pfi(self, s):
+
+        ar = s['aromatic_rings']
+        logd = s['cx_logd']
+        return ar + logd
+
+    def _assess_chembl(self):
+        '''
+        Does the target have ligands in ChEMBL (PFI <=7, SMART hits <= 2, scaffolds >= 2)
+        Scaffold counting currently not implemented
+
+        '''
+        self._search_chembl()
+        self.activities['pfi'] = self.activities.apply(self._calc_pfi, axis=1)
+
+        alerts = self._structural_alerts()
+
+        self.activities = self.activities.merge(alerts, how='left', on='canonical_smiles')
+        self.activities['alert_id'].fillna(0, inplace=True)
+        self.activities.to_csv("{}/sm_chembl_activities_processed.csv".format(self.store_fetched))
+        df = self.activities[(self.activities['pfi'] <= 7) & (self.activities['alert_id'] <= 2)]
+
+        f = {x: 'first' for x in df.columns}
+        f['canonical_smiles'] = 'count'
+        df2 = df.groupby('accession').agg(f).reset_index(drop=True)
+        df2 = df2[['accession', 'canonical_smiles', 'target_chembl_id']]
+        self.out_df = df2.merge(self.out_df, how='right', on='accession')
+        self.out_df['Bucket_7'] = 0
+        self.out_df['target_chembl_id_y'] = self.out_df['target_chembl_id_y'].fillna(self.out_df['target_chembl_id_x'])
+        self.out_df.rename(columns={'target_chembl_query_y': 'target_chembl_query'}, inplace=True)
+
+        self.out_df.loc[(self.out_df['canonical_smiles'] >= 2), 'Bucket_7'] = 1
+
+        # Use RDKit to count scaffolds
+        # PandasTools.AddMoleculeColumnToFrame(self.activities,'canonical_smiles','molecule')
+        # PandasTools.AddMurckoToFrame(self.activities,molCol='molecule',MurckoCol='scaffold',Generic=True)
+        # self.activities.to_csv('scaffolds.csv')
+
+    ##############################################################################################################
+    #
+    # Functions relating to buckets 8
+    # Is this target considered druggable using Finan et al's druggable genome?
+    #
+    ##############################################################################################################
+
+    def _assess_druggable_genome(self):
+        '''
+        Is this target considered druggable using Finan et al's druggable genome?
+        '''
+        df = pd.read_csv(os.path.join(DATA_PATH, 'druggable_genome.csv'))
+        df = df[['ensembl_gene_id', 'small_mol_druggable']]
+
+        self.out_df = df.merge(self.out_df, how='right', on='ensembl_gene_id')
+        self.out_df['Bucket_8'] = 0
+        self.out_df.loc[(self.out_df['small_mol_druggable'] == 'Y'), 'Bucket_8'] = 1
+        self.out_df['small_mol_druggable'].fillna('N', inplace=True)
+
+    ##############################################################################################################
+    #
+    # Functions relating to buckets 9
+    #
+    #
+    ##############################################################################################################
+
+    def _assign_bucket_9(self):
+        '''
+        Future bucket
+
+        '''
+
+        pass
+
+    ##############################################################################################################
+    #
+    # Higher level functions relating to the overall process
+    #
+    #
+    ##############################################################################################################
+
+    def _summarise_buckets(self):
+
+        '''
+        Calculate the best highest bucket for each target
+        :return:
+        '''
+
+        self.out_df['Top_bucket'] = 9
+        for x in range(8, 0, -1):
+            self.out_df.loc[(self.out_df['Bucket_{}'.format(x)] == 1), 'Top_bucket'] = x
+            self.out_df['Bucket_{}'.format(x)].fillna(0, inplace=True)
+
+        self.out_df['Bucket_sum'] = self.out_df['Bucket_1'] + self.out_df['Bucket_2'] + self.out_df[
+            'Bucket_3'] + self.out_df['Bucket_4'] + self.out_df['Bucket_5'] + self.out_df['Bucket_6'] + self.out_df[
+                                        'Bucket_7'] + self.out_df['Bucket_8']
+
+    def _clinical_precedence(self, s):
+        return 1 * s['Bucket_1'] + 0.7 * s['Bucket_2'] + 0.2 * s['Bucket_3']
+
+    def _discovery_precedence(self, s):
+        return 0.7 * s['Bucket_4'] + 0.3 * s['Bucket_7']
+
+    def _predicted_tractable(self, s):
+        return 0.7 * s['Bucket_5'] + 0.3 * s['Bucket_6'] + 0.3 * s['Bucket_8']
+
+    def assign_buckets(self):
+        '''
+        Assigns the supplied list of gene IDs into their corresponding tractability buckets.
+        :return: A Pandas DataFrame containing the Ensembl gene ID and associated tractability bucket
+        '''
+
+        self._assess_clinical()
+        self._assess_pdb()
+        self._assess_pockets()
+        self._assess_chembl()
+        self._assess_druggable_genome()
+        # self._assign_bucket_9()
+        self._summarise_buckets()
+
+        print(self.out_df.columns)
+        # Add extra buckets to the list below
+        self.out_df = self.out_df[['ensembl_gene_id', 'symbol', 'accession',
+                                   'Bucket_1', 'Bucket_2', 'Bucket_3', 'Bucket_4', 'Bucket_5', 'Bucket_6', 'Bucket_7',
+                                   'Bucket_8', 'Bucket_sum', 'Top_bucket',
+                                   'ensemble', 'canonical_smiles', 'small_mol_druggable', 'PDB_Known_Ligand']]
+
+        # Calculate category scores and assign highest category to each target
+
+        self.out_df['Category'] = 'Unknown'
+        self.out_df['Clinical_Precedence'] = self.out_df.apply(self._clinical_precedence, axis=1)
+        self.out_df['Discovery_Precedence'] = self.out_df.apply(self._discovery_precedence, axis=1)
+        self.out_df['Predicted_Tractable'] = self.out_df.apply(self._predicted_tractable, axis=1)
+
+        self.out_df.loc[(self.out_df['Top_bucket'] <= 3), 'Category'] = 'Clinical_Precedence'
+        self.out_df.loc[(self.out_df['Top_bucket'] == 4) | (self.out_df['Top_bucket'] == 7),
+                        'Category'] = 'Discovery_Precedence'
+
+        self.out_df.loc[
+            (self.out_df['Top_bucket'] == 5) | (self.out_df['Top_bucket'] == 6) | (self.out_df['Top_bucket'] == 8),
+            'Category'] = 'Predicted_Tractable'
+
+        return self.out_df
+

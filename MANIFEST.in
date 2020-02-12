@@ -1,0 +1,3 @@
+include ot_tractability_pipeline/data/*.tsv
+include ot_tractability_pipeline/data/*.csv
+include ot_tractability_pipeline/data/*.txt
