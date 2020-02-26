@@ -91,6 +91,6 @@ whether a target's location is suitable for the PROTAC approach. UniProt and GO 
 7 = High confidence bad location  
 
 #### Other clinical evidence buckets
-Bucket 1 (ChEMBL) Targets with approved (phase4) drugs (other than SM or AB) 
-Bucket 2 (ChEMBL) Targets with drug in clinical phase 2 or 3 (other than SM or AB)
-Bucket 3 (ChEMBL) Pre-clinical (phase 1) targets with molecule (other than SM or AB)
+Bucket 1 (ChEMBL) Targets with approved (phase4) drugs (other than SM or AB)  
+Bucket 2 (ChEMBL) Targets with drug in clinical phase 2 or 3 (other than SM or AB)  
+Bucket 3 (ChEMBL) Pre-clinical (phase 1) targets with molecule (other than SM or AB)  
