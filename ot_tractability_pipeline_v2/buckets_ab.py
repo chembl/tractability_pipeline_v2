@@ -44,6 +44,12 @@ class Antibody_buckets(object):
     #
     #
     ##############################################################################################################
+    # Load accepted GO locations
+    accepted_go_locs = {}
+    with open(os.path.join(DATA_PATH, 'go_accepted_loc.tsv')) as go_loc_file:
+        for line in go_loc_file:
+            line = line.split('\t')
+            accepted_go_locs[line[0]] = line[2]
 
     def __init__(self, Pipeline_setup, database_url=None, prev_output=None):
 
@@ -59,6 +65,9 @@ class Antibody_buckets(object):
         # ChEMBL DB connection
         self.engine = Pipeline_setup.engine
 
+        # # use function from Pipeline setup
+        # self.make_request = Pipeline_setup.make_request
+
         # All chembl data loaded into here
         self.all_chembl_targets = None
 
@@ -68,12 +77,12 @@ class Antibody_buckets(object):
         # Map back to Uniprot accession
         self.pdb_map = {}
 
-        # Load accepted GO locations
-        self.accepted_go_locs = {}
-        with open(os.path.join(DATA_PATH, 'go_accepted_loc.tsv')) as go_loc_file:
-            for line in go_loc_file:
-                line = line.split('\t')
-                self.accepted_go_locs[line[0]] = line[2]
+        # # Load accepted GO locations
+        # self.accepted_go_locs = {}
+        # with open(os.path.join(DATA_PATH, 'go_accepted_loc.tsv')) as go_loc_file:
+        #     for line in go_loc_file:
+        #         line = line.split('\t')
+        #         self.accepted_go_locs[line[0]] = line[2]
 
         # If antibody results are to be combined with small molecule results, append antibody columns to sm results
         # Otherwise, use the id_xref dataframe
@@ -98,6 +107,7 @@ class Antibody_buckets(object):
         :return:
         '''
 
+        # print("\t\t- Processing protein complexes...")
         pc = self.all_chembl_targets[self.all_chembl_targets['target_type'].str.contains("PROTEIN COMPLEX")]
         not_pc = self.all_chembl_targets[~self.all_chembl_targets['target_type'].str.contains("PROTEIN COMPLEX")]
 
@@ -133,13 +143,13 @@ class Antibody_buckets(object):
     def _assign_buckets_1_to_3(self):
         '''
         Merge the results of the ChEMBL search with the OT data (right join, to keep all OT targets)
-
         Group activity data by target, assign the Max Phase for each targets, and use it to assign buckets 1 to 3
-
         Possible duplication of effort of the OT known_drug score
 
         :return:
         '''
+
+        print("\t- Assessing clinical buckets 1-3...")
 
         self.all_chembl_targets = pd.read_sql_query(chembl_clinical_ab_targets, self.engine)
         self.all_chembl_targets.loc[self.all_chembl_targets['ref_type'] == 'Expert', ['ref_id', 'ref_url']] = 'NA'
@@ -155,29 +165,48 @@ class Antibody_buckets(object):
             self.all_chembl_targets.to_csv("{}/ab_all_chembl_targets.csv".format(self.store_fetched))
 
         # Make sure max phase is for correct indication
-
         self.all_chembl_targets = self.all_chembl_targets[
             self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
 
-        def other_func(x):
-            return tuple(x)
+        def set_as_tuple(x):
+            return tuple(set(x))
 
-        f = {x: other_func for x in self.all_chembl_targets if x != 'accession'}
+        def set_strings(x):
+            ''' concatenate in string and include only if it is a string (not nan), and exists '''
+            return ",".join(set([y for y in x if isinstance(y,str) and y]))
+
+        # f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
+        f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f['max_phase_for_ind'] = 'max'
         f['max_phase'] = 'max'
+        f['drug_chembl_id'] = set_strings
+        f['drug_name'] = set_strings
 
         self.all_chembl_targets = self.all_chembl_targets.groupby('accession', as_index=False).agg(f)
+        # self.all_chembl_targets = self.all_chembl_targets.groupby(['accession']).agg(f).reset_index(drop=True)
+
+        # self.all_chembl_targets.to_csv("{}/ab_all_chembl_targets_checkpoint1.csv".format(self.store_fetched), index=False)
+        # self.out_df.to_csv("{}/ab_out_df_checkpoint1.csv".format(self.store_fetched), index=False)
 
         self.out_df = self.all_chembl_targets.merge(self.out_df, how='outer', on='accession', suffixes=('_sm', '_ab'))
 
         self.out_df.drop(['component_id', 'drug_name', 'ref_id', 'ref_type', 'tid',
                           'ref_url'], axis=1, inplace=True)
 
-        f = {x: 'first' for x in self.out_df.columns if x != 'ensembl_gene_id'}
-        f['max_phase_for_ind'] = 'max'
+        # self.out_df.to_csv("{}/ab_out_df_checkpoint2.csv".format(self.store_fetched), index=False)
 
-        self.out_df = self.out_df.groupby(['ensembl_gene_id'], as_index=False).agg(f)
+        f2 = {x: 'first' for x in self.out_df.columns if x != 'ensembl_gene_id'}
+        f2['max_phase_for_ind'] = 'max'
+        # f2['drug_chembl_id'] = set_strings
+        # f2['drug_name'] = set_strings
 
+        self.out_df = self.out_df.groupby(['ensembl_gene_id'], as_index=False).agg(f2)
+
+        self.out_df.rename(columns = {'drug_chembl_id':'drug_chembl_ids_ab',
+                                      'drug_name':'drug_names_ab'}, inplace = True)
+
+        # self.out_df.to_csv("{}/ab_out_df_checkpoint3.csv".format(self.store_fetched), index=False)
+        
         self.out_df['Bucket_1_ab'] = 0
         self.out_df['Bucket_2_ab'] = 0
         self.out_df['Bucket_3_ab'] = 0
@@ -188,6 +217,8 @@ class Antibody_buckets(object):
         self.out_df.loc[
             (self.out_df['max_phase_for_ind'] < 2) & (self.out_df['max_phase_for_ind'] > 0), 'Bucket_3_ab'] = 1
 
+        print(self.out_df.columns)
+
     ##############################################################################################################
     #
     # Functions relating to buckets 4, 6 and 7
@@ -195,11 +226,28 @@ class Antibody_buckets(object):
     #
     ##############################################################################################################
 
-    def _make_request(self, url, data):
+    # def make_request(self, url, data):
+    #     request = urllib2.Request(url)
+
+    #     try:
+    #         url_file = urllib2.urlopen(request)
+    #     except urllib2.HTTPError as e:
+    #         if e.code == 404:
+    #             print("[NOTFOUND %d] %s" % (e.code, url))
+    #         else:
+    #             print("[ERROR %d] %s" % (e.code, url))
+
+    #         return None
+
+    #     return url_file.read().decode()        
+
+    # Method is used in several workflows
+    @staticmethod
+    def make_request(url, data):
         request = urllib2.Request(url)
 
         try:
-            url_file = urllib2.urlopen(request)
+            url_file = urllib2.urlopen(request, data)
         except urllib2.HTTPError as e:
             if e.code == 404:
                 print("[NOTFOUND %d] %s" % (e.code, url))
@@ -210,16 +258,18 @@ class Antibody_buckets(object):
 
         return url_file.read().decode()
 
-    def _post_request(self, url, data):
+    @staticmethod
+    def post_request_uniprot(url, data):
         base = 'http://www.uniprot.org'
         full_url = "%s/%s" % (base, url)
 
         if isinstance(data, (list, tuple)):
             data = ",".join(data)
 
-        return self._make_request(full_url, data.encode())
+        return Antibody_buckets.make_request(full_url, data.encode())
 
-    def split_loc(self, s):
+    @staticmethod
+    def split_loc(s):
         '''
         Process the delimited string returned from uniprot webservice call
         :param s:
@@ -255,7 +305,8 @@ class Antibody_buckets(object):
                     loc_evidence_li.append((evidence, locations))
         return loc_evidence_li
 
-    def _check_evidence(self, evidence_li):
+    @staticmethod
+    def _check_evidence(evidence_li):
 
         high_conf_evidence = [e for e in evidence_li if ('ECO:0000269' in e or 'ECO:0000305' in e)]
 
@@ -296,25 +347,36 @@ class Antibody_buckets(object):
         Uniprot (loc): Targets in "Cell membrane" or "Secreted", high confidence
         '''
 
+        print("\t- Assessing Uniprot location (buckets 4 and 6)...")
+
         # Return all reviewed and Human targets
         url = "uniprot/?format=tab&query=*&fil=reviewed%3ayes+AND+organism%3a%22Homo+sapiens+(Human)+%5b9606%5d%22&columns=id,comment(SUBCELLULAR+LOCATION),comment(DOMAIN),feature(DOMAIN+EXTENT),feature(INTRAMEMBRANE),feature(TOPOLOGICAL+DOMAIN),feature(TRANSMEMBRANE),feature(SIGNAL)"
         data = ['P42336', 'P60484']
 
-        location = self._post_request(url, data)
+        location = self.post_request_uniprot(url, data)
         location = [x.split('\t') for x in location.split('\n')]
         df = pd.DataFrame(location[1:], columns=location[0])
         df['uniprot_loc_test'] = df['Subcellular location [CC]']
 
         df['Subcellular location [CC]'] = df['Subcellular location [CC]'].apply(self.split_loc)
 
+        df.rename(columns={'Entry': 'accession'}, inplace=True)
+
         if self.store_fetched: 
             df.to_csv("{}/ab_uniprot_for_buckets_4_and_6.csv".format(self.store_fetched))
 
         df['Bucket_4_ab'], df['Uniprot_high_conf_loc'] = zip(*df.apply(self._set_b4_flag, axis=1))
         df['Bucket_6_ab'], df['Uniprot_med_conf_loc'] = zip(*df.apply(self._set_b6_flag, axis=1))
-        df.rename(columns={'Entry': 'accession'}, inplace=True)
+
+        if self.store_fetched: 
+            df.loc[:, ~df.columns.isin(['Bucket_4_ab', 'Bucket_6_ab'])].to_csv(
+                "{}/ab_uniprot_locations_processed.csv".format(self.store_fetched))
 
         self.out_df = self.out_df.merge(df, how='left', on='accession')
+
+        print(self.out_df.columns)
+
+
 
     ##############################################################################################################
     #
@@ -323,7 +385,9 @@ class Antibody_buckets(object):
     #
     ##############################################################################################################
 
-    def _set_b5_b8_flag(self, s):
+    # def _set_b5_b8_flag(self, s):
+    @staticmethod
+    def _set_b5_b8_flag(s):
         try:
             cc = s['go.CC']
         except:
@@ -366,7 +430,8 @@ class Antibody_buckets(object):
             elif confidence == 'Medium':
                 med_conf_loc.append((go_loc, evidence))
 
-            if go_id in self.accepted_go_locs.keys():
+            # if go_id in self.accepted_go_locs.keys():
+            if go_id in Antibody_buckets.accepted_go_locs.keys():
                 if confidence == 'High':
                     accepted_high_conf_loc.append(go_loc)
                 elif confidence == 'Medium':
@@ -386,8 +451,17 @@ class Antibody_buckets(object):
         '''
         GO CC
         '''
+        print("\t- Assessing GO location (buckets 5 and 8)...")
+
         self.out_df['Bucket_5_ab'], self.out_df['GO_high_conf_loc'], self.out_df['Bucket_8_ab'], self.out_df[
-            'GO_med_conf_loc'] = zip(*self.out_df.apply(self._set_b5_b8_flag, axis=1))
+            'GO_med_conf_loc'] = zip(*self.out_df.apply(Antibody_buckets._set_b5_b8_flag, axis=1))
+        
+        # save processed GO location info to file
+        if self.store_fetched: 
+            self.out_df.loc[:, self.out_df.columns.isin(['accession', 'GO_high_conf_loc', 'GO_med_conf_loc'])].to_csv(
+                "{}/ab_GO_locations_processed.csv".format(self.store_fetched))
+
+        print(self.out_df.columns)
 
     ##############################################################################################################
     #
@@ -420,8 +494,10 @@ class Antibody_buckets(object):
         '''
         Uniprot (SigP + TMHMM): targets with predicted Signal Peptide or Trans-membrane regions, and not destined to
         organelles
-
         '''
+
+        print("\t- Assessing Uniprot SigP or TMHMM bucket 7...")
+
         self.out_df['Bucket_7_ab'] = 0
 
         self.out_df.loc[(self.out_df['Transmembrane'].str.contains('TRANSMEM', na=False)), 'Bucket_7_ab'] = 1
@@ -429,6 +505,9 @@ class Antibody_buckets(object):
 
         self.out_df['Transmembrane'] = self.out_df['Transmembrane'].apply(self._split_loc_b7)
         self.out_df['Signal peptide'] = self.out_df['Signal peptide'].apply(self._split_loc_b7)
+        self.out_df.rename(columns={'Signal peptide': 'Signal_peptide'}, inplace=True)
+
+        print(self.out_df.columns)
 
     ##############################################################################################################
     #
@@ -448,6 +527,8 @@ class Antibody_buckets(object):
         '''
         HPA
         '''
+
+        print("\t- Assessing Human Protein Atlas main location bucket 9...")
 
         # Download latest file
         zip_file = urllib2.urlopen('https://www.proteinatlas.org/download/subcellular_location.tsv.zip')
@@ -471,6 +552,10 @@ class Antibody_buckets(object):
         self.out_df['Bucket_9_ab'] = 0
         self.out_df.loc[(self.out_df['main_location'].str.contains("Plasma membrane", na=False)), 'Bucket_9_ab'] = 1
 
+        self.out_df.rename(columns={'main_location': 'HPA_main_location'}, inplace=True)
+
+        print(self.out_df.columns)
+
     ##############################################################################################################
     #
     # Higher level functions relating to the overall process
@@ -489,6 +574,7 @@ class Antibody_buckets(object):
 
     def _summarise_buckets(self):
 
+        print("\t- Summarising buckets...")
         self.out_df.drop('go.CC', inplace=True, axis=1)
 
         self.out_df['Top_bucket_ab'] = 10
@@ -524,43 +610,64 @@ class Antibody_buckets(object):
         # Columns to keep. This includes columns from the small molecule pipeline
 
         self.out_df = self.out_df[['symbol', 'accession',
-                                   'Bucket_1', 'Bucket_2', 'Bucket_3', 'Bucket_4',
-                                   'Bucket_5', 'Bucket_6', 'Bucket_7',
-                                   'Bucket_8', 'Bucket_sum', 'Top_bucket', 'Category',
-                                   'Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable',
-                                   'PDB_Known_Ligand',
-                                   'ensemble', 'canonical_smiles', 'small_mol_druggable',
-                                   'Bucket_1_ab', 'Bucket_2_ab', 'Bucket_3_ab', 'Bucket_4_ab',
-                                   'Bucket_5_ab', 'Bucket_6_ab', 'Bucket_7_ab',
-                                   'Bucket_8_ab', 'Bucket_9_ab', 'Bucket_sum_ab', 'Top_bucket_ab',
+                                   # 'Bucket_1_sm', 'Bucket_2_sm', 'Bucket_3_sm', 
+                                   # 'Bucket_4_sm', 'Bucket_5_sm', 'Bucket_6_sm', 'Bucket_7_sm',
+                                   # 'Bucket_8_sm', 'Bucket_sum_sm', 'Top_bucket_sm', 'Category_sm',
+                                   # 'Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm',
+                                   # 'PDB_Known_Ligand',
+                                   # 'ensemble', 'canonical_smiles', 'Small_Molecule_Druggable_Genome_Member',
+                                   'Bucket_1_ab', 'Bucket_2_ab', 'Bucket_3_ab', 
+                                   'Bucket_4_ab', 'Bucket_5_ab', 'Bucket_6_ab', 
+                                   'Bucket_7_ab', 'Bucket_8_ab', 'Bucket_9_ab', 
+                                   'Bucket_sum_ab', 'Top_bucket_ab',
+                                   'drug_chembl_ids_ab',
                                    'Uniprot_high_conf_loc', 'GO_high_conf_loc',
                                    'Uniprot_med_conf_loc',
-                                   'GO_med_conf_loc', 'Transmembrane', 'Signal peptide', 'main_location'
+                                   'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location'
                                    ]]
-        self.out_df.rename(columns={'canonical_smiles': 'High_Quality_ChEMBL_compounds',
-                                    'small_mol_druggable': 'Small_Molecule_Druggable_Genome_Member',
-                                    'main_location': 'HPA_main_location', 'Signal peptide': 'Signal_peptide'},
-                           inplace=True)
-        self.out_df.sort_values(['Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable'],
-                                ascending=[False, False, False], inplace=True)
+        # self.out_df.rename(columns={'main_location': 'HPA_main_location'}, inplace=True)
+        # self.out_df.sort_values(['Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable'],
+        #                         ascending=[False, False, False], inplace=True)
 
         # Score each category, and label highest category
         self.out_df['Clinical_Precedence_ab'] = self.out_df.apply(self._clinical_precedence, axis=1)
-        self.out_df['Predicted_Tractable__High_confidence'] = self.out_df.apply(self._high_conf_pred, axis=1)
-        self.out_df['Predicted_Tractable__Medium_to_low_confidence'] = self.out_df.apply(self._med_conf_pred, axis=1)
+        self.out_df['Predicted_Tractable_ab_High_confidence'] = self.out_df.apply(self._high_conf_pred, axis=1)
+        self.out_df['Predicted_Tractable_ab_Medium_to_low_confidence'] = self.out_df.apply(self._med_conf_pred, axis=1)
 
         self.out_df['Category_ab'] = 'Unknown'
 
-        self.out_df.loc[(self.out_df['Top_bucket_ab'] <= 3), 'Category_ab'] = 'Clinical_Precedence'
+        self.out_df.loc[(self.out_df['Top_bucket_ab'] <= 3), 'Category_ab'] = 'Clinical_Precedence_ab'
         self.out_df.loc[(self.out_df['Top_bucket_ab'] == 4) | (self.out_df['Top_bucket_ab'] == 5),
-                        'Category_ab'] = 'Predicted_Tractable__High_confidence'
+                        'Category_ab'] = 'Predicted_Tractable_ab_High_confidence'
 
         self.out_df.loc[
             (self.out_df['Top_bucket_ab'] == 6) | (self.out_df['Top_bucket_ab'] == 7) | (
                     self.out_df['Top_bucket_ab'] == 8) | (self.out_df['Top_bucket_ab'] == 9),
-            'Category_ab'] = 'Predicted_Tractable__Medium_to_low_confidence'
+            'Category_ab'] = 'Predicted_Tractable_ab_Medium_to_low_confidence'
 
         # self.out_df = self.out_df[(self.out_df['Top_bucket'] < 9 ) | (self.out_df['Top_bucket_ab'] < 10) ]
 
+        print(self.out_df.columns)
+
         return self.out_df.astype({x: 'int64' for x in self.out_df.columns if "Bucket" in x})
+
+
+
+    @staticmethod
+    def ab2json(d):
+        return {
+            'Bucket_scores': {'Bucket_1_ab':d.Bucket_1_ab, 'Bucket_2_ab':d.Bucket_2_ab, 'Bucket_3_ab':d.Bucket_3_ab, 
+                              'Bucket_4_ab':d.Bucket_4_ab, 'Bucket_5_ab':d.Bucket_5_ab, 'Bucket_6_ab':d.Bucket_6_ab, 
+                              'Bucket_7_ab':d.Bucket_7_ab, 'Bucket_8_ab':d.Bucket_8_ab, 'Bucket_9_ab':d.Bucket_9_ab},
+            'Bucket_evaluation': {'Bucket_sum_ab':d.Bucket_sum_ab, 'Top_bucket_ab':d.Top_bucket_ab,
+                                   'Clinical_Precedence_ab':d.Clinical_Precedence_ab, 
+                                   'Predicted_Tractable_ab_High_confidence':d.Predicted_Tractable_ab_High_confidence,
+                                   'Predicted_Tractable_ab_Medium_to_low_confidence':d.Predicted_Tractable_ab_Medium_to_low_confidence, 
+                                   'Category_ab':d.Category_ab},
+            'Bucket_evidences': {'Bucket_1-3_ab': {'drug_chembl_ids_ab':d.drug_chembl_ids_ab}, 
+                                 'Bucket_4-8_ab': {'Uniprot_high_conf_loc':d.Uniprot_high_conf_loc, 'GO_high_conf_loc':d.GO_high_conf_loc, 
+                                                   'Uniprot_med_conf_loc':d.Uniprot_med_conf_loc, 'GO_med_conf_loc':d.GO_med_conf_loc, 
+                                                   'Transmembrane':d.Transmembrane, 'Signal_peptide':d.Signal_peptide}, 
+                                 'Bucket_9_ab': {'HPA_main_location':d.HPA_main_location}}
+            }
 

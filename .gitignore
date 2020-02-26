@@ -1,4 +1,8 @@
 fetched data*
+tractability_buckets_*.tsv
 *.egg-info/
 .DS_Store
 __pycache__
+execute.py
+input_genelists/
+data/
