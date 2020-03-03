@@ -81,7 +81,7 @@ Bucket 5 (Mathieson et al. 2018) Targets with half-life 10-24 hours
 Bucket 6 (Woong et al. 2011) Targets with known ubiquitination sites  
 Not implemented: Bucket 7 (-) Targets with predicted ubiquitination sites  
 Bucket 8 (Europe PMC) Targets mentioned in PROTAC literature  
-Bucket 9 (ChEMBL) Targets with SM in ChEMBL with activity on target based assay (pChEMBL ≥5) 
+Bucket 9 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 
 PROTAC_location_Bucket  
 In addition to PROTAC tractability buckets, there is an additional "PROTAC_location_Bucket", which allows you to assess

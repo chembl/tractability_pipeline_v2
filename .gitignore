@@ -5,4 +5,4 @@ tractability_buckets_*
 __pycache__
 execute.py
 input_genelists/
-data/
+data_unused/

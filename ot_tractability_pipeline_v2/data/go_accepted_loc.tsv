@@ -1,0 +1,24 @@
+GO:0033181	cellular_component	plasma membrane proton-transporting V-type ATPase complex
+GO:0045258	cellular_component	plasma membrane succinate dehydrogenase complex (ubiquinone)
+GO:0045272	cellular_component	plasma membrane respiratory chain complex I
+GO:0045270	cellular_component	plasma membrane proton-transporting ATP synthase, central stalk
+GO:0045276	cellular_component	plasma membrane respiratory chain complex III
+GO:0045274	cellular_component	plasma membrane respiratory chain complex II
+GO:0045278	cellular_component	plasma membrane respiratory chain complex IV
+GO:0001533	cellular_component	cornified envelope
+GO:1903561	cellular_component	extracellular vesicle
+GO:0098595	cellular_component	perivitelline space
+GO:0099544	cellular_component	perisynaptic space
+GO:0048046	cellular_component	apoplast
+GO:0010367	cellular_component	extracellular isoamylase complex
+GO:1990377	cellular_component	organomineral extracellular matrix
+GO:0000222	cellular_component	plasma membrane proton-transporting V-type ATPase, V0 domain
+GO:0062023	cellular_component	collagen-containing extracellular matrix
+GO:0043230	cellular_component	extracellular organelle
+GO:0005576	cellular_component	extracellular region
+GO:0062039	cellular_component	biofilm matrix
+GO:0031012	cellular_component	extracellular matrix
+GO:0042383	cellular_component	sarcolemma
+GO:0005886	cellular_component	plasma membrane
+GO:0044421	cellular_component	extracellular region part
+GO:0044420	cellular_component	extracellular matrix component
