@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb  3 10:38:51 2020
+This script runs the whole tractability pipeline (all sub-workflows) and concatenates the final results.
+It contains also the functions for the pipeline setup.
 
+Created on Mon Feb  3 10:38:51 2020
 @author: Melanie Schneider
 """
 
@@ -16,7 +18,6 @@ import os
 import mygene
 import numpy as np
 import pandas as pd
-from pandas.io.json import json_normalize
 import pkg_resources
 from sqlalchemy import create_engine
 import json

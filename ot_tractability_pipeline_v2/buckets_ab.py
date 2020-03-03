@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb  3 10:38:51 2020
+This script contains all functions for the antibody (AB) workflow.
 
+Created on Mon Feb  3 10:38:51 2020
 @author: Melanie Schneider
 """
+
 # import json
 # import time
 # import argparse
@@ -18,7 +20,6 @@ import os
 # import mygene
 # import numpy as np
 import pandas as pd
-from pandas.io.json import json_normalize
 import pkg_resources
 # from sqlalchemy import create_engine
 
@@ -458,8 +459,8 @@ class Antibody_buckets(object):
         
         # save processed GO location info to file
         if self.store_fetched: 
-            self.out_df.loc[:, self.out_df.columns.isin(['accession', 'GO_high_conf_loc', 'GO_med_conf_loc'])].to_csv(
-                "{}/ab_GO_locations_processed.csv".format(self.store_fetched))
+            self.out_df.loc[self.out_df['accession'].notnull(), self.out_df.columns.isin(['accession', 'GO_high_conf_loc', 'GO_med_conf_loc'])].to_csv(
+                "{}/ab_GO_locations_processed.csv".format(self.store_fetched), index=False)
 
         print(self.out_df.columns)
 

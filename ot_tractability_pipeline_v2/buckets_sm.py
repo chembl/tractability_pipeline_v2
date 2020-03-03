@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb  3 10:38:51 2020
+This script contains all functions for the small molecule (SM) workflow.
 
+Created on Mon Feb  3 10:38:51 2020
 @author: Melanie Schneider
 """
+
 # import io
 # import re
 import json
@@ -18,8 +20,8 @@ import os
 # import mygene
 import numpy as np
 import pandas as pd
-from pandas.io.json import json_normalize
 import pkg_resources
+import itertools
 # from sqlalchemy import create_engine
 
 PY3 = sys.version > '3'
@@ -83,19 +85,31 @@ class Small_molecule_buckets(object):
             # Default ligand filter
             # Load unwanted PDB ligands list from text files
 
-            with open(os.path.join(DATA_PATH, 'organic_solvents.txt')) as solvent_file:
-                solvents = [a.split('\t')[0] for a in solvent_file]
+            # with open(os.path.join(DATA_PATH, 'organic_solvents.txt')) as solvent_file:
+            #     solvents = [a.split('\t')[0] for a in solvent_file]
 
-            with open(os.path.join(DATA_PATH, 'sugars.txt')) as sugar_file:
-                sugars = [a.split('\t')[0] for a in sugar_file]
+            # with open(os.path.join(DATA_PATH, 'sugars.txt')) as sugar_file:
+            #     sugars = [a.split('\t')[0] for a in sugar_file]
 
-            with open(os.path.join(DATA_PATH, 'cofactors.txt')) as cofactor_file:
-                cofactors = [a.split('\t')[0] for a in cofactor_file]
+            # with open(os.path.join(DATA_PATH, 'cofactors.txt')) as cofactor_file:
+            #     cofactors = [a.split('\t')[0] for a in cofactor_file]
 
-            with open(os.path.join(DATA_PATH, 'additives.txt')) as additives_file:
-                additives = [a.split('\t')[0] for a in additives_file]
+            # with open(os.path.join(DATA_PATH, 'additives.txt')) as additives_file:
+            #     additives = [a.split('\t')[0] for a in additives_file]
+            
+            # # ligand_filter = solvents + sugars + cofactors + additives
+            # ligand_filter = solvents + sugars + additives
 
-            ligand_filter = solvents + sugars + cofactors + additives
+            # Using unwanted_ligands.txt (mainly buffer compounds, crystallisation agents and sugars) 
+            # from "http://cheminfo.u-strasbg.fr:8080/scPDB/2012/db_search/scpdb_generation_process.jsp"
+            with open(os.path.join(DATA_PATH, 'unwanted_ligands.txt')) as unwanted_file:
+                unwanted = list(itertools.chain.from_iterable([a.split() for a in unwanted_file]))
+            
+            # unwanted_ligands_added.txt contains additional additives and solvents
+            with open(os.path.join(DATA_PATH, 'unwanted_ligands_added.txt')) as unwanted_plus_file:
+                unwanted_plus = list(itertools.chain.from_iterable([a.split() for a in unwanted_plus_file]))
+
+            ligand_filter = unwanted + unwanted_plus
 
             self.ligand_filter = ligand_filter
 

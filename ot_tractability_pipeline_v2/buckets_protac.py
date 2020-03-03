@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb  3 10:38:51 2020
+This script contains all functions for the PROTAC workflow.
 
+Created on Mon Feb  3 10:38:51 2020
 @author: Melanie Schneider
 """
+
 # import io
 # import re
 # import zipfile
@@ -18,7 +20,6 @@ import os
 # import mygene
 import numpy as np
 import pandas as pd
-#from pandas.io.json import json_normalize
 import pkg_resources
 # from sqlalchemy import create_engine
 
@@ -134,6 +135,7 @@ class Protac_buckets(object):
             # finally:
             print(uniprot_loc_data.columns)
             self.out_df = self.out_df.merge(uniprot_loc_data, how='left', on='accession')
+            # print(self.out_df.columns)
 
             '''
             GO CC (loc)
@@ -141,6 +143,7 @@ class Protac_buckets(object):
             try:
                 # try reading the output from store_tetched antibody pipeline to avoid getting data again
                 go_loc_data = pd.read_csv("{}/ab_GO_locations_processed.csv".format(self.store_fetched))
+                print("\t--- GO location data used from Antibody workflow file ab_GO_locations_processed.csv ---")
                 self.out_df = self.out_df.merge(go_loc_data, how='left', on='accession')
                 
             except IOError:
@@ -236,8 +239,9 @@ class Protac_buckets(object):
                 
 
             else:
-                print("\t--- GO location data used from Antibody workflow ---")
+                # print("\t--- GO location data used from Antibody workflow ---")
                 print(go_loc_data.columns)
+                print(self.out_df.columns)
 
 
 
@@ -521,8 +525,7 @@ class Protac_buckets(object):
             data = url.read()
             try: data = json.loads(data.decode())
             except UnicodeDecodeError: data = json.loads(data)
-            annot_df = pd.json_normalize(data,
-                                      record_path='annotations')  # pd.read_json(json.dumps(data), orient='records')
+            annot_df = pd.json_normalize(data, record_path='annotations')  # pd.read_json(json.dumps(data), orient='records')
             tags_df = pd.json_normalize(data, record_path=['annotations', 'tags'])
             df_lists.append(annot_df)
             tags_list.append(tags_df)
