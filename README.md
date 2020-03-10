@@ -54,7 +54,7 @@ where `genes.csv` is a file with one Ensembl Gene ID per line with no headers.
 Bucket 1 (ChEMBL) Targets with approved (phase 4) SM drug  
 Bucket 2 (ChEMBL) Targets with SM in clinical phase 2 or 3  
 Bucket 3 (ChEMBL) Targets with SM in pre-clinical phase 1  
-Bucket 4 (PDB) Targets with crystal structures with ligands (excluding: buffer compounds,﻿solvents, crystallization agents/additives and sugars)  
+Bucket 4 (PDB) Targets with crystal structures with ligands (excluding: buffer compounds, solvents, crystallization agents/additives and sugars)  
 Bucket 5 (DrugEBIlity) Targets with score ≥0.7  
 Bucket 6 (DrugEBIlity) Targets with 0 < score < 0.7  
 Bucket 7 (ChEMBL) Targets with ligands (PFI ≤7, SMART hits ≤2, scaffolds ≥2)  
@@ -65,10 +65,10 @@ Not implemented: Bucket 9 (SureChEMBL) Targets with ‘chemical’ patents in th
 Bucket 1 (ChEMBL) Targets with approved (phase 4) AB drug  
 Bucket 2 (ChEMBL) Targets with AB in clinical phase 2 or 3  
 Bucket 3 (ChEMBL) Targets with AB in pre-clinical phase 1  
-Bucket 4 (Uniprot loc) Targets in “Cell membrane” or “Secreted” - high confidence  
+Bucket 4 (UniProt loc) Targets in “Cell membrane” or “Secreted” - high confidence  
 Bucket 5 (GO CC) Targets with GO CC terms indicative for plasma membrane, extracellular region/matrix, or secretion - high confidence  
-Bucket 6 (Uniprot loc) Targets in “Cell membrane” or “Secreted” - medium confidence  
-Bucket 7 (Uniprot SigP or TMHMM): Targets with predicted Signal Peptide or Trans-membrane regions, and not destined to organelles  
+Bucket 6 (UniProt loc) Targets in “Cell membrane” or “Secreted” - medium confidence  
+Bucket 7 (UniProt SigP or TMHMM): Targets with predicted Signal Peptide or Trans-membrane regions, and not destined to organelles  
 Bucket 8 (GO CC) Targets with GO CC terms indicative for plasma membrane, extracellular region/matrix, or secretion - medium confidence  
 Bucket 9 (Human Protein Atlas) Targets with main location “Plasma membrane” - high confidence
 
@@ -79,7 +79,7 @@ Bucket 3 (-) Targets with PROTAC in pre-clinical phase 1
 Bucket 4 (Mathieson et al. 2018) Targets with half-life >24 hours  
 Bucket 5 (Mathieson et al. 2018) Targets with half-life 10-24 hours  
 Bucket 6 (Woong et al. 2011) Targets with known ubiquitination sites  
-Not implemented: Bucket 7 (-) Targets with predicted ubiquitination sites  
+Bucket 7 (UniProt) Targets with UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]"  
 Bucket 8 (Europe PMC) Targets mentioned in PROTAC literature  
 Bucket 9 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 

@@ -470,26 +470,50 @@ class Protac_buckets(object):
 
         print(self.out_df.columns)
 
+
     ##############################################################################################################
     #
     # Functions relating to bucket 7
-    # Predicted ubiquitination sites
+    # UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]" 
     #
     ##############################################################################################################
 
+    #staticmethod
+    # def get_uniprot_ubl(self):
     def _assign_bucket_7(self):
         '''
-        Predicted ubiquitination sites
+        UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]"
         '''
 
-        print("\t- Assessing predicted ubiquitation site bucket 7...")
+        print("\t- Assessing UniProt ubiquitination indication bucket 7...")
 
-        self.out_df['predicted_ubiquitination_sites'] = None
+        full_url = 'https://www.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
+        Uniprot_ubl_conjugation = Antibody_buckets.make_request(full_url, data=None)
+        # url = 'uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),database(PhosphoSitePlus)'
+        # data = ['P42336', 'P60484']
+        # Uniprot_ubl_conjugation = Antibody_buckets.post_request_uniprot(url, data)
 
-        self.out_df['Bucket_7_PROTAC'] = 0
-        # self.out_df.loc[(self.out_df['predicted_ubiquitination_sites'] > 0), 'Bucket_7_PROTAC'] = 1
+        Uniprot_ubl_conjugation = [x.split('\t') for x in Uniprot_ubl_conjugation.split('\n')]
+        df = pd.DataFrame(Uniprot_ubl_conjugation[1:], columns=Uniprot_ubl_conjugation[0])
+
+        df.rename(columns={'Entry': 'accession', 
+                           'Post-translational modification': 'Uniprot_PTM'
+                           }, inplace=True)
+
+
+        if self.store_fetched: 
+            df.to_csv("{}/protac_uniprot_ubl_conjugation.csv".format(self.store_fetched))
+
+        df['Bucket_7_PROTAC'] = 1
+
+        self.out_df = self.out_df.merge(df, how='left', on='accession')
+        # replace NaN with 0
+        self.out_df['Bucket_7_PROTAC'].fillna(0, inplace=True)
 
         print(self.out_df.columns)
+
+    
+
 
     ##############################################################################################################
     #
@@ -835,7 +859,7 @@ class Protac_buckets(object):
                                    # 'drug_chembl_ids_PROTAC',
                                    'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean',
                                    'Max_halflife',
-                                   'number_of_ubiquitination_sites', 'predicted_ubiquitination_sites',
+                                   'number_of_ubiquitination_sites', 'Uniprot_PTM', 'Cross-link', 
                                    'full_id', 'compound_chembl_ids_PROTAC', 'PROTAC_location_Bucket'
                                    ]]
 
@@ -865,7 +889,7 @@ class Protac_buckets(object):
             'Bucket_evidences': {'Bucket_1-3_PROTAC': {'drug_chembl_ids_PROTAC':{}}, #{'drug_chembl_ids_PROTAC':d.drug_chembl_ids_PROTAC}, 
                                  'Bucket_4-5_PROTAC': {'Max_halflife':d.Max_halflife}, 
                                  'Bucket_6_PROTAC': {'number_of_ubiquitination_sites':d.number_of_ubiquitination_sites}, 
-                                 'Bucket_7_PROTAC': {'predicted_ubiquitination_sites':d.predicted_ubiquitination_sites}, 
+                                 'Bucket_7_PROTAC': {'Uniprot_PTM':d.Uniprot_PTM, 'Cross-link':d.Cross-link}, 
                                  'Bucket_8_PROTAC': {'full_id':d.full_id}, 
                                  'Bucket_9_PROTAC': {'compound_chembl_ids_PROTAC':d.compound_chembl_ids_PROTAC}}
             }
