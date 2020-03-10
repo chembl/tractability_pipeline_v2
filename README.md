@@ -79,7 +79,7 @@ Bucket 3 (-) Targets with PROTAC in pre-clinical phase 1
 Bucket 4 (Mathieson et al. 2018) Targets with half-life >24 hours  
 Bucket 5 (Mathieson et al. 2018) Targets with half-life 10-24 hours  
 Bucket 6 (Woong et al. 2011) Targets with known ubiquitination sites  
-Bucket 7 (UniProt) Targets with UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]"  
+Bucket 7 (UniProt) Targets with UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]", which is manually curated from literature  
 Bucket 8 (Europe PMC) Targets mentioned in PROTAC literature  
 Bucket 9 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 
