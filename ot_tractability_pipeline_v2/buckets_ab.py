@@ -648,6 +648,10 @@ class Antibody_buckets(object):
 
         # self.out_df = self.out_df[(self.out_df['Top_bucket'] < 9 ) | (self.out_df['Top_bucket_ab'] < 10) ]
 
+        # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        self.out_df['drug_chembl_ids_ab'].fillna('', inplace=True)
+        self.out_df['drug_chembl_ids_ab'] = self.out_df['drug_chembl_ids_ab'].apply(lambda x: list(x.split(",")))
+
         print(self.out_df.columns)
 
         return self.out_df.astype({x: 'int64' for x in self.out_df.columns if "Bucket" in x})

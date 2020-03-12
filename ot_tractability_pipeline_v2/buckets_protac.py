@@ -488,6 +488,8 @@ class Protac_buckets(object):
         print("\t- Assessing UniProt ubiquitination indication bucket 7...")
 
         full_url = 'https://www.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
+        
+        from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
         Uniprot_ubl_conjugation = Antibody_buckets.make_request(full_url, data=None)
         # url = 'uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),database(PhosphoSitePlus)'
         # data = ['P42336', 'P60484']
@@ -497,7 +499,8 @@ class Protac_buckets(object):
         df = pd.DataFrame(Uniprot_ubl_conjugation[1:], columns=Uniprot_ubl_conjugation[0])
 
         df.rename(columns={'Entry': 'accession', 
-                           'Post-translational modification': 'Uniprot_PTM'
+                           'Post-translational modification': 'Uniprot_PTM',
+                           'Cross-link': 'Uniprot_CrossLink'
                            }, inplace=True)
 
 
@@ -859,7 +862,7 @@ class Protac_buckets(object):
                                    # 'drug_chembl_ids_PROTAC',
                                    'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean',
                                    'Max_halflife',
-                                   'number_of_ubiquitination_sites', 'Uniprot_PTM', 'Cross-link', 
+                                   'number_of_ubiquitination_sites', 'Uniprot_PTM', 'Uniprot_CrossLink', 
                                    'full_id', 'compound_chembl_ids_PROTAC', 'PROTAC_location_Bucket'
                                    ]]
 
@@ -871,6 +874,12 @@ class Protac_buckets(object):
 
         # self.out_df = self.out_df[(self.out_df['Top_bucket_sm'] < 9) | (self.out_df['Top_bucket_ab'] < 10) | (
         #             self.out_df['Top_bucket_PROTAC'] < 10)]
+
+        # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # self.out_df['drug_chembl_ids_PROTAC'].fillna('', inplace=True)
+        # self.out_df['drug_chembl_ids_PROTAC'] = self.out_df['drug_chembl_ids_PROTAC'].apply(lambda x: list(x.split(",")))
+        self.out_df['compound_chembl_ids_PROTAC'].fillna('', inplace=True)
+        self.out_df['compound_chembl_ids_PROTAC'] = self.out_df['compound_chembl_ids_PROTAC'].apply(lambda x: list(x.split(",")))
 
         print(self.out_df.columns)
 
@@ -889,7 +898,7 @@ class Protac_buckets(object):
             'Bucket_evidences': {'Bucket_1-3_PROTAC': {'drug_chembl_ids_PROTAC':{}}, #{'drug_chembl_ids_PROTAC':d.drug_chembl_ids_PROTAC}, 
                                  'Bucket_4-5_PROTAC': {'Max_halflife':d.Max_halflife}, 
                                  'Bucket_6_PROTAC': {'number_of_ubiquitination_sites':d.number_of_ubiquitination_sites}, 
-                                 'Bucket_7_PROTAC': {'Uniprot_PTM':d.Uniprot_PTM, 'Cross-link':d.Cross-link}, 
+                                 'Bucket_7_PROTAC': {'Uniprot_PTM':d.Uniprot_PTM, 'Uniprot_CrossLink':d.Uniprot_CrossLink}, 
                                  'Bucket_8_PROTAC': {'full_id':d.full_id}, 
                                  'Bucket_9_PROTAC': {'compound_chembl_ids_PROTAC':d.compound_chembl_ids_PROTAC}}
             }

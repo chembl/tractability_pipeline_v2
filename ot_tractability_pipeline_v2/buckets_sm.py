@@ -642,7 +642,11 @@ class Small_molecule_buckets(object):
         self.out_df.loc[
             (self.out_df['Top_bucket_sm'] == 5) | (self.out_df['Top_bucket_sm'] == 6) | (self.out_df['Top_bucket_sm'] == 8),
             'Category_sm'] = 'Predicted_Tractable_sm'
-
+        
+        # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        self.out_df['drug_chembl_ids_sm'].fillna('', inplace=True)
+        self.out_df['drug_chembl_ids_sm'] = self.out_df['drug_chembl_ids_sm'].apply(lambda x: list(x.split(",")))
+        
         print(self.out_df.columns)
 
         # return self.out_df

@@ -76,10 +76,10 @@ Bucket 9 (Human Protein Atlas) Targets with main location “Plasma membrane” 
 Bucket 1 (-) Targets with approved (phase 4) PROTAC drug  
 Bucket 2 (-) Targets with PROTAC in clinical phase 2 or 3  
 Bucket 3 (-) Targets with PROTAC in pre-clinical phase 1  
-Bucket 4 (Mathieson et al. 2018) Targets with half-life >24 hours  
-Bucket 5 (Mathieson et al. 2018) Targets with half-life 10-24 hours  
+Bucket 4 (Mathieson et al. 2018) Targets with max. half-life >24 hours  
+Bucket 5 (Mathieson et al. 2018) Targets with max. half-life 10-24 hours  
 Bucket 6 (Woong et al. 2011) Targets with known ubiquitination sites  
-Bucket 7 (UniProt) Targets with UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]", which is manually curated from literature  
+Bucket 7 (UniProt) Targets with UniProt ubiquitination indication keyword:"Ubl conjugation [KW-0832]", which is manually curated from literature  
 Bucket 8 (Europe PMC) Targets mentioned in PROTAC literature  
 Bucket 9 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 
