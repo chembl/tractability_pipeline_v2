@@ -138,7 +138,6 @@ class Small_molecule_buckets(object):
     def _process_protein_complexes(self):
         '''
         For protein complexes, see if we know the binding subunit, and only keep these
-
         :return:
         '''
 
@@ -158,7 +157,6 @@ class Small_molecule_buckets(object):
             select distinct bs.site_id, td.tid 
             from {0}.target_dictionary td, {0}.binding_sites bs
             where td.tid = bs.tid and td.tid IN {1}
-            
             '''.format(CHEMBL_VERSION, tuple(chunk))
             df_list.append(pd.read_sql_query(q, self.engine))
 
@@ -207,11 +205,11 @@ class Small_molecule_buckets(object):
         print("\t- Assessing clinical buckets 1-3...")
 
         def set_as_tuple(x):
-            return tuple(set(x))
+            return tuple(x)
 
         def set_strings(x):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
-            return ",".join(set([y for y in x if isinstance(y,str) and y]))
+            return ",".join([y for y in x if isinstance(y,str) and y])
 
         #print(self.id_xref['symbol'])
         self._search_chembl_clinical()
@@ -580,7 +578,7 @@ class Small_molecule_buckets(object):
 
         print("\t- Summarising buckets...")
 
-        self.out_df['Top_bucket_sm'] = 9
+        self.out_df['Top_bucket_sm'] = 10
         for x in range(8, 0, -1):
             self.out_df.loc[(self.out_df['Bucket_{}_sm'.format(x)] == 1), 'Top_bucket_sm'] = x
             self.out_df['Bucket_{}_sm'.format(x)].fillna(0, inplace=True)
@@ -622,7 +620,7 @@ class Small_molecule_buckets(object):
                                    'Bucket_4_sm', 'Bucket_5_sm', 'Bucket_6_sm', 
                                    'Bucket_7_sm', 'Bucket_8_sm', 
                                    'Bucket_sum_sm', 'Top_bucket_sm',
-                                   'drug_chembl_ids_sm',
+                                   'drug_chembl_ids_sm', 'drug_names_sm',
                                    'DrugEBIlity_score', 'High_Quality_ChEMBL_compounds', 'Small_Molecule_Druggable_Genome_Member', 'PDB_Known_Ligand', 
                                    ]]
 
@@ -644,8 +642,11 @@ class Small_molecule_buckets(object):
             'Category_sm'] = 'Predicted_Tractable_sm'
         
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
         self.out_df['drug_chembl_ids_sm'].fillna('', inplace=True)
-        self.out_df['drug_chembl_ids_sm'] = self.out_df['drug_chembl_ids_sm'].apply(lambda x: list(x.split(",")))
+        self.out_df['drug_chembl_ids_sm'] = self.out_df['drug_chembl_ids_sm'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        self.out_df['drug_names_sm'].fillna('', inplace=True)
+        self.out_df['drug_names_sm'] = self.out_df['drug_names_sm'].apply(lambda x: list(dict.fromkeys(x.split(","))))
         
         print(self.out_df.columns)
 
@@ -664,7 +665,7 @@ class Small_molecule_buckets(object):
                                    'Clinical_Precedence_sm':d.Clinical_Precedence_sm, 
                                    'Discovery_Precedence_sm':d.Discovery_Precedence_sm, 
                                    'Predicted_Tractable_sm':d.Predicted_Tractable_sm, 'Category_sm':d.Category_sm},
-            'Bucket_evidences': {'Bucket_1-3_sm': {'drug_chembl_ids_sm':d.drug_chembl_ids_sm}, 
+            'Bucket_evidences': {'Bucket_1-3_sm': {'drug_chembl_ids_sm':d.drug_chembl_ids_sm, 'drug_names_sm':d.drug_names_sm}, 
                                  'Bucket_4_sm': {'PDB_Known_Ligand':d.PDB_Known_Ligand}, 
                                  'Bucket_5-6_sm': {'DrugEBIlity_score':d.DrugEBIlity_score}, 
                                  'Bucket_7_sm': {'High_Quality_ChEMBL_compounds':d.High_Quality_ChEMBL_compounds}, 

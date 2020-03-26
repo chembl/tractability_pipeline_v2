@@ -170,11 +170,11 @@ class Antibody_buckets(object):
             self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
 
         def set_as_tuple(x):
-            return tuple(set(x))
+            return tuple(x)
 
         def set_strings(x):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
-            return ",".join(set([y for y in x if isinstance(y,str) and y]))
+            return ",".join([y for y in x if isinstance(y,str) and y])
 
         # f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
@@ -191,7 +191,7 @@ class Antibody_buckets(object):
 
         self.out_df = self.all_chembl_targets.merge(self.out_df, how='outer', on='accession', suffixes=('_sm', '_ab'))
 
-        self.out_df.drop(['component_id', 'drug_name', 'ref_id', 'ref_type', 'tid',
+        self.out_df.drop(['component_id', 'ref_id', 'ref_type', 'tid',
                           'ref_url'], axis=1, inplace=True)
 
         # self.out_df.to_csv("{}/ab_out_df_checkpoint2.csv".format(self.store_fetched), index=False)
@@ -621,7 +621,7 @@ class Antibody_buckets(object):
                                    'Bucket_4_ab', 'Bucket_5_ab', 'Bucket_6_ab', 
                                    'Bucket_7_ab', 'Bucket_8_ab', 'Bucket_9_ab', 
                                    'Bucket_sum_ab', 'Top_bucket_ab',
-                                   'drug_chembl_ids_ab',
+                                   'drug_chembl_ids_ab', 'drug_names_ab',
                                    'Uniprot_high_conf_loc', 'GO_high_conf_loc',
                                    'Uniprot_med_conf_loc',
                                    'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location'
@@ -649,8 +649,11 @@ class Antibody_buckets(object):
         # self.out_df = self.out_df[(self.out_df['Top_bucket'] < 9 ) | (self.out_df['Top_bucket_ab'] < 10) ]
 
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
         self.out_df['drug_chembl_ids_ab'].fillna('', inplace=True)
-        self.out_df['drug_chembl_ids_ab'] = self.out_df['drug_chembl_ids_ab'].apply(lambda x: list(x.split(",")))
+        self.out_df['drug_chembl_ids_ab'] = self.out_df['drug_chembl_ids_ab'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        self.out_df['drug_names_ab'].fillna('', inplace=True)
+        self.out_df['drug_names_ab'] = self.out_df['drug_names_ab'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
 
@@ -669,7 +672,7 @@ class Antibody_buckets(object):
                                    'Predicted_Tractable_ab_High_confidence':d.Predicted_Tractable_ab_High_confidence,
                                    'Predicted_Tractable_ab_Medium_to_low_confidence':d.Predicted_Tractable_ab_Medium_to_low_confidence, 
                                    'Category_ab':d.Category_ab},
-            'Bucket_evidences': {'Bucket_1-3_ab': {'drug_chembl_ids_ab':d.drug_chembl_ids_ab}, 
+            'Bucket_evidences': {'Bucket_1-3_ab': {'drug_chembl_ids_ab':d.drug_chembl_ids_ab, 'drug_names_ab':d.drug_names_ab}, 
                                  'Bucket_4-8_ab': {'Uniprot_high_conf_loc':d.Uniprot_high_conf_loc, 'GO_high_conf_loc':d.GO_high_conf_loc, 
                                                    'Uniprot_med_conf_loc':d.Uniprot_med_conf_loc, 'GO_med_conf_loc':d.GO_med_conf_loc, 
                                                    'Transmembrane':d.Transmembrane, 'Signal_peptide':d.Signal_peptide}, 

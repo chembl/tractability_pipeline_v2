@@ -2,7 +2,10 @@
 from ot_tractability_pipeline_v2.queries_sm import CHEMBL_VERSION
 
 chembl_clinical_protac = '''
-    SELECT DISTINCT mh.parent_molregno, di.efo_id, di.efo_term, di.max_phase_for_ind
+    SELECT DISTINCT mh.parent_molregno, 
+        di.efo_id, 
+        di.efo_term, 
+        di.max_phase_for_ind
     FROM {0}.molecule_dictionary md,
     	{0}.molecule_hierarchy mh,
     	{0}.drug_indication di
@@ -14,6 +17,7 @@ chembl_clinical_protac = '''
 
 chembl_clinical_protac_targets = '''
     SELECT DISTINCT mh.parent_molregno, 
+        md.chembl_id AS drug_chembl_id,
     	md.pref_name AS drug_name, 
     	md.max_phase,
     	td.tid,
@@ -49,14 +53,15 @@ chembl_clinical_protac_targets = '''
 # =============================================================================
 chembl_small_mol = """
     SELECT DISTINCT mh.parent_molregno, 
-        md.molregno, 
-        md.pref_name AS compound_name
+         md.molregno, 
+         md.pref_name AS compound_name
     FROM {0}.molecule_dictionary md,
         {0}.molecule_hierarchy mh
     WHERE md.molregno = mh.molregno
     
     AND md.molecule_type = 'Small molecule'
     """.format(CHEMBL_VERSION)
+
 
 # =============================================================================
 # get all small molecules and their targets with a pChEMBL >=5

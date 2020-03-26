@@ -160,7 +160,7 @@ class Othercl_buckets(object):
 
         def set_strings(x):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
-            return ",".join(set([y for y in x if isinstance(y,str) and y]))
+            return ",".join([y for y in x if isinstance(y,str) and y])
 
         f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f['max_phase_for_ind'] = 'max'
@@ -269,7 +269,8 @@ class Othercl_buckets(object):
                                    # 'number_of_ubiquitination_sites',
                                    # 'full_id', 'PROTAC_location_Bucket',
                                    'Bucket_1_othercl', 'Bucket_2_othercl', 'Bucket_3_othercl',
-                                   'Bucket_sum_othercl', 'Top_bucket_othercl', 'drug_chembl_ids_othercl'
+                                   'Bucket_sum_othercl', 'Top_bucket_othercl', 
+                                   'drug_chembl_ids_othercl', 'drug_names_othercl'
                                    ]]
 
         # self.out_df.sort_values(['Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable'],
@@ -289,8 +290,11 @@ class Othercl_buckets(object):
         # self.out_df = self.out_df[(self.out_df['Top_bucket'] < 9 ) | (self.out_df['Top_bucket_ab'] < 10) | (self.out_df['Top_bucket_othercl'] < 10) ]
 
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
         self.out_df['drug_chembl_ids_othercl'].fillna('', inplace=True)
-        self.out_df['drug_chembl_ids_othercl'] = self.out_df['drug_chembl_ids_othercl'].apply(lambda x: list(x.split(",")))
+        self.out_df['drug_chembl_ids_othercl'] = self.out_df['drug_chembl_ids_othercl'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        self.out_df['drug_names_othercl'].fillna('', inplace=True)
+        self.out_df['drug_names_othercl'] = self.out_df['drug_names_othercl'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
 
@@ -304,7 +308,7 @@ class Othercl_buckets(object):
             'Bucket_scores': {'Bucket_1_othercl':d.Bucket_1_othercl, 'Bucket_2_othercl':d.Bucket_2_othercl, 'Bucket_3_othercl':d.Bucket_3_othercl},
             'Bucket_evaluation': {'Bucket_sum_othercl':d.Bucket_sum_othercl, 'Top_bucket_othercl':d.Top_bucket_othercl,
                                   'Clinical_Precedence_othercl':d.Clinical_Precedence_othercl}, #, 'Category_othercl':d.Category_othercl},
-            'Bucket_evidences': {'Bucket_1-3_othercl': {'drug_chembl_ids_othercl':d.drug_chembl_ids_othercl}}
+            'Bucket_evidences': {'Bucket_1-3_othercl': {'drug_chembl_ids_othercl':d.drug_chembl_ids_othercl, 'drug_names_othercl':d.drug_names_othercl}}
             }
 
             

@@ -235,24 +235,35 @@ def main(args=None):
                                         True, True, 
                                         False], inplace=True)
 
+
+    out_buckets.reset_index(inplace=True)
+    out_buckets.rename(columns={'index': 'ensembl_gene_id'}, inplace=True)
     
-    out_buckets.to_csv('tractability_buckets_{}.tsv'.format(d), sep='\t')
+    out_buckets.to_csv('tractability_buckets_{}.tsv'.format(d), sep='\t', index=False)
     if store_fetched:
-        out_buckets.to_csv('{}/tractability_buckets_{}.tsv'.format(store_fetched,d), sep='\t')
+        out_buckets.to_csv('{}/tractability_buckets_{}.tsv'.format(store_fetched,d), sep='\t', index=False)
 
 
 
     # =========================================================================
     # Transforming output DataFrame into json format
     # =========================================================================
-    out_buckets.reset_index(inplace=True)
 
     with open("./tractability_buckets_{}.json".format(d),"w") as h:
         for idx,r in out_buckets.iterrows():
-            gene = {"ensembl_gene_id":r['index']}
+            gene = {"ensembl_gene_id":r['ensembl_gene_id']}
             gene["SM"] = sm.sm2json(r)
             gene["AB"] = ab.ab2json(r)
             gene["PROTAC"] = protac.protac2json(r)
+            gene["othercl"] = othercl.othercl2json(r)
+            json.dump(gene, h)
+
+    with open("./tractability_buckets_{}_no_PROTAC.json".format(d),"w") as h:
+        for idx,r in out_buckets.iterrows():
+            gene = {"ensembl_gene_id":r['ensembl_gene_id']}
+            gene["SM"] = sm.sm2json(r)
+            gene["AB"] = ab.ab2json(r)
+            # gene["PROTAC"] = protac.protac2json(r)
             gene["othercl"] = othercl.othercl2json(r)
             json.dump(gene, h)
 

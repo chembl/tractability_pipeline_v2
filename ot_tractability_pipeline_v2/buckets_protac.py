@@ -418,74 +418,57 @@ class Protac_buckets(object):
 
         print(self.out_df.columns)
 
+
     ##############################################################################################################
     #
-    # Functions relating to buckets 4 and 5
+    # Functions relating to bucket 4
     # Protein Turnover
     #
     ##############################################################################################################
 
-    def _assign_bucket_4_and_5(self):
+    # def _assign_bucket_4_and_5(self):
+    def _assign_bucket_4(self):
         '''
         Protein Turnover
         '''
 
-        print("\t- Assessing protein turnover bucket 4 and 5...")
+        print("\t- Assessing protein turnover bucket 4...")
 
         self.out_df['Bucket_4_PROTAC'] = 0
-        self.out_df['Bucket_5_PROTAC'] = 0
+        # self.out_df['Bucket_5_PROTAC'] = 0
 
         df = pd.read_csv(os.path.join(DATA_PATH, 'protein_half_life_hq.csv'))
 
         df = df.merge(self.out_df, right_on='symbol', left_on='gene_name', how='right')
         df = df.groupby('ensembl_gene_id', as_index=False).max(numeric_only=True)
         df['Max_halflife'].fillna(-1, inplace=True)
+        df['Min_halflife'].fillna(-1, inplace=True)
 
         self.out_df = df.merge(self.out_df, how='right', on='ensembl_gene_id', suffixes=['_drop', ''])
-
-        self.out_df.loc[(self.out_df['Max_halflife'] >= 24), 'Bucket_4_PROTAC'] = 1
-        self.out_df.loc[(self.out_df['Max_halflife'] > 10) & (self.out_df['Max_halflife'] < 24), 'Bucket_5_PROTAC'] = 1
-
-        print(self.out_df.columns)
-
-    ##############################################################################################################
-    #
-    # Functions relating to buckets 6
-    # Known ubiquitination sites
-    #
-    ##############################################################################################################
-
-    def _assign_bucket_6(self):
-        '''
-        Known ubiquitation sites
-        '''
-
-        print("\t- Assessing ubiquitation site bucket 6...")
-
-        ub_df = pd.read_csv(os.path.join(DATA_PATH, 'ubiquitination_sites.csv'))
-        self.out_df = ub_df.merge(self.out_df, on='symbol', how='right')
-
-        self.out_df['Bucket_6_PROTAC'] = 0
-        self.out_df.loc[(self.out_df['number_of_ubiquitination_sites'] > 0), 'Bucket_6_PROTAC'] = 1
+        
+        # Assign bucket if Half-life data is available
+        self.out_df.loc[(self.out_df['Min_halflife'] > 0), 'Bucket_4_PROTAC'] = 1
+        # self.out_df.loc[(self.out_df['Max_halflife'] >= 24), 'Bucket_4_PROTAC'] = 1
+        # self.out_df.loc[(self.out_df['Max_halflife'] > 10) & (self.out_df['Max_halflife'] < 24), 'Bucket_5_PROTAC'] = 1
 
         print(self.out_df.columns)
 
 
     ##############################################################################################################
     #
-    # Functions relating to bucket 7
+    # Functions relating to bucket 5
     # UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]" 
     #
     ##############################################################################################################
 
     #staticmethod
     # def get_uniprot_ubl(self):
-    def _assign_bucket_7(self):
+    def _assign_bucket_5(self):
         '''
         UniProt ubiquitination indication based on keyword:"Ubl conjugation [KW-0832]"
         '''
 
-        print("\t- Assessing UniProt ubiquitination indication bucket 7...")
+        print("\t- Assessing UniProt ubiquitination indication bucket 5...")
 
         full_url = 'https://www.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
         
@@ -507,20 +490,51 @@ class Protac_buckets(object):
         if self.store_fetched: 
             df.to_csv("{}/protac_uniprot_ubl_conjugation.csv".format(self.store_fetched))
 
-        df['Bucket_7_PROTAC'] = 1
+        df['Bucket_5_PROTAC'] = 1
 
         self.out_df = self.out_df.merge(df, how='left', on='accession')
         # replace NaN with 0
-        self.out_df['Bucket_7_PROTAC'].fillna(0, inplace=True)
+        self.out_df['Bucket_5_PROTAC'].fillna(0, inplace=True)
 
         print(self.out_df.columns)
 
     
 
+    ##############################################################################################################
+    #
+    # Functions relating to bucket 6
+    # Reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa and [Woong et al. 2011]
+    #
+    ##############################################################################################################
+
+    def _assign_bucket_6(self):
+        '''
+        Reported ubiquitation sites in PhosphoSitePlus, mUbiSiDa and [Woong et al. 2011]
+        '''
+
+        print("\t- Assessing ubiquitation site bucket 6...")
+        
+        PhosphoSitePlus = pd.read_csv(os.path.join(DATA_PATH, "PSP_Ubiquitination_site_dataset"), skiprows=3, sep='\t')
+        mUbiSiDa = pd.read_excel(os.path.join(DATA_PATH, "mUbiSiDa_data_2013_10_22.xlsx"), header=None)
+        ub_df = pd.read_csv(os.path.join(DATA_PATH, 'ubiquitination_sites.csv'))
+        self.out_df = ub_df.merge(self.out_df, on='symbol', how='right')
+
+        self.out_df['Ub_PhosphoSitePlus'] = 0
+        self.out_df['Ub_mUbiSiDa_2013'] = 0
+        self.out_df['Bucket_6_PROTAC'] = 0
+        self.out_df.loc[(self.out_df['accession'].isin(PhosphoSitePlus['ACC_ID'])), 'Ub_PhosphoSitePlus'] = 1
+        self.out_df.loc[(self.out_df['accession'].isin(PhosphoSitePlus['ACC_ID'])), 'Bucket_6_PROTAC'] = 1
+        self.out_df.loc[(self.out_df['accession'].isin(mUbiSiDa[0])), 'Ub_mUbiSiDa_2013'] = 1
+        self.out_df.loc[(self.out_df['accession'].isin(mUbiSiDa[0])), 'Bucket_6_PROTAC'] = 1
+        self.out_df.loc[(self.out_df['number_of_ubiquitination_sites'] > 0), 'Bucket_6_PROTAC'] = 1
+
+        print(self.out_df.columns)
+
+
 
     ##############################################################################################################
     #
-    # Functions relating to bucket 8
+    # Functions relating to bucket 7
     # Taregts mentioned in PROTAC literature
     #
     ##############################################################################################################
@@ -599,12 +613,12 @@ class Protac_buckets(object):
     def _full_ID(self, row):
         return "http://europepmc.org/abstract/{}/{}#eur...".format(row['source'], row['id'])
 
-    def _assign_bucket_8(self):
+    def _assign_bucket_7(self):
         '''
         Mentioned in PROTAC literature
         '''
 
-        print("\t- Assessing PROTAC literature bucket 8...")
+        print("\t- Assessing PROTAC literature bucket 7...")
 
         self.papers_df = self._search_papers()
         
@@ -620,8 +634,8 @@ class Protac_buckets(object):
 
         self.out_df = self.out_df.merge(tagged_targets_df, how='left', on='accession')
 
-        self.out_df['Bucket_8_PROTAC'] = 0
-        self.out_df.loc[(~self.out_df['full_id'].isna()), 'Bucket_8_PROTAC'] = 1
+        self.out_df['Bucket_7_PROTAC'] = 0
+        self.out_df.loc[(~self.out_df['full_id'].isna()), 'Bucket_7_PROTAC'] = 1
         
         # for debugging:
         # self.out_df.to_csv("{}/protac_out_df_checkpoint.csv".format(self.store_fetched), encoding='utf-8')
@@ -629,7 +643,7 @@ class Protac_buckets(object):
 
     ##############################################################################################################
     #
-    # Functions relating to bucket 9
+    # Functions relating to bucket 8
     # Existing active molecule
     # (before: Small Molecule Tractable)
     #
@@ -650,9 +664,9 @@ class Protac_buckets(object):
         '''
 
         # print("\t\t- Querying ChEMBL...")
-        small_mol_info = pd.read_sql_query(chembl_small_mol, self.engine)
+        # small_mol_info = pd.read_sql_query(chembl_small_mol, self.engine)
         self.all_chembl_targets = pd.read_sql_query(chembl_small_mol_active_targets, self.engine)
-        self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')
+        # self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')
 
         if self.store_fetched: 
             self.all_chembl_targets.to_csv("{}/protac_all_chembl_active_targets.csv".format(self.store_fetched))
@@ -717,20 +731,20 @@ class Protac_buckets(object):
 
         self.all_chembl_targets = pd.concat([binding_subunits, undefined, not_pc], sort=False)
 
-    def _assign_bucket_9(self):
+    def _assign_bucket_8(self):
         '''
         Target with SM in ChEMBL with activity on target based assay
         Merge the results of the ChEMBL search with the OT data (right join, to keep all OT targets)
         Group activity data by target, add 'compound_chembl_id' and 'pchembl_value' as tupels to target,
-        and assign bucket 9
+        and assign bucket 8
         assign the Max Phase for each targets, and use it to assign buckets 1 to 3
         '''
 
-        print("\t- Assessing existing active molecule bucket 9...")
+        print("\t- Assessing existing active molecule bucket 8...")
 
         def set_strings(x):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
-            return ",".join(set([y for y in x if isinstance(y,str) and y]))
+            return ",".join([y for y in x if isinstance(y,str) and y])
             # data = []
             # for y in x:
             #     if isinstance(y,str) and y:
@@ -739,7 +753,7 @@ class Protac_buckets(object):
 
         def set_float_value(x):
             ''' concatenate in string and include only if it is a number, not nan, and exists '''
-            return ",".join(set([str(y) for y in x if isinstance(y,float) and not np.isnan(y) and y]))
+            return ",".join([str(y) for y in x if isinstance(y,float) and not np.isnan(y) and y])
         
         # print(self.id_xref['symbol'])
 
@@ -747,18 +761,23 @@ class Protac_buckets(object):
         # from ot_tractability_pipeline_v2.buckets_ab import _process_protein_complexes
         self._process_protein_complexes()
 
-        # self.out_df.to_csv("{}/protac_out_df_checkpoint1.csv".format(self.store_fetched), index=False)
+        self.all_chembl_targets.to_csv("{}/protac_all_chembl_targets_processed.csv".format(self.store_fetched), index=False)
+
+        # quick bug fix: only keep row when 'accession' is available
+        self.all_chembl_targets = self.all_chembl_targets.loc[self.all_chembl_targets['accession'].notna()]
+
+        self.all_chembl_targets.to_csv("{}/protac_all_chembl_targets_processed_2.csv".format(self.store_fetched), index=False)
 
         # self.gene_xref = self.id_xref[['accession', 'ensembl_gene_id', 'symbol']]
         # self.out_df = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
-        self.out_df = self.all_chembl_targets.merge(self.out_df, how='outer', on='accession')
-
-        self.smallmol_active = self.out_df
-        self.smallmol_active.to_csv("{}/protac_smallmol_active.csv".format(self.store_fetched), index=False)
+        self.out_df = self.out_df.merge(self.all_chembl_targets, how='left', on='accession')
+        
+        # self.smallmol_active = self.out_df
+        # self.smallmol_active.to_csv("{}/protac_smallmol_active.csv".format(self.store_fetched), index=False)
 
         # self.out_df.drop(['component_id', 'compound_name', 'ref_id', 'ref_type', 'tid', 'molregno',
         #                   'parent_molregno', 'ref_url'], axis=1, inplace=True)
-        self.out_df.drop(['component_id', 'target_name', 'target_type', 'tid', 'molregno',
+        self.out_df.drop(['component_id', 'target_name', 'target_type', 'tid', #'molregno',
                           'parent_molregno'], axis=1, inplace=True)
 
         f = {x: 'first' for x in self.out_df.columns}
@@ -766,21 +785,26 @@ class Protac_buckets(object):
         f['pchembl_value'] = set_float_value
 
         self.out_df = self.out_df.groupby(['ensembl_gene_id']).agg(f).reset_index(drop=True)
+ 
+       # # quick bug fix: clear entry when 'accession' is not available
+       #  self.out_df.loc[(self.out_df['accession'].isna()), 'compound_chembl_id'] = ''
+       #  self.out_df.loc[(self.out_df['accession'].isna()), 'pchembl_value'] = ''
 
         self.out_df.rename(columns = {'compound_chembl_id':'compound_chembl_ids_PROTAC',
                                       'pchembl_value':'pchembl_values_PROTAC'}, inplace = True)
 
         # self.out_df.to_csv("{}/protac_out_df_checkpoint2.csv".format(self.store_fetched), index=False)
 
-        self.out_df['Bucket_9_PROTAC'] = 0
+        self.out_df['Bucket_8_PROTAC'] = 0
         # print(self.out_df.compound_chembl_ids_PROTAC)
         
         # check if tuple in column 'compound_chembl_ids_PROTAC' is not empty, then set bucket 9 to 1
-        self.out_df.loc[(self.out_df['compound_chembl_ids_PROTAC'] != ''), 'Bucket_9_PROTAC'] = 1
+        self.out_df.loc[(self.out_df['compound_chembl_ids_PROTAC'] != ''), 'Bucket_8_PROTAC'] = 1
 
         # self.out_df.to_csv("{}/protac_out_df_checkpoint3.csv".format(self.store_fetched), index=False)
 
         print(self.out_df.columns)
+
 
     ##############################################################################################################
     #
@@ -803,7 +827,8 @@ class Protac_buckets(object):
         print("\t- Summarising buckets...")
 
         self.out_df['Top_bucket_PROTAC'] = 10
-        for x in range(9, 0, -1):
+        # for x in range(9, 0, -1):
+        for x in range(8, 0, -1):
             self.out_df.loc[(self.out_df['Bucket_{}_PROTAC'.format(x)] == 1), 'Top_bucket_PROTAC'] = x
             self.out_df['Bucket_{}_PROTAC'.format(x)].fillna(0, inplace=True)
 
@@ -811,9 +836,7 @@ class Protac_buckets(object):
                                            self.out_df[
                                                'Bucket_3_PROTAC'] + self.out_df['Bucket_4_PROTAC'] + self.out_df[
                                                'Bucket_5_PROTAC'] + self.out_df['Bucket_6_PROTAC'
-                                           ] + self.out_df['Bucket_7_PROTAC'] + self.out_df['Bucket_8_PROTAC'] + \
-                                           self.out_df[
-                                               'Bucket_9_PROTAC']
+                                           ] + self.out_df['Bucket_7_PROTAC'] + self.out_df['Bucket_8_PROTAC']# + self.out_df['Bucket_9_PROTAC']
 
         self.out_df.set_index('ensembl_gene_id')
 
@@ -825,11 +848,11 @@ class Protac_buckets(object):
 
         self._PROTAC_location_bucket()
         self._assign_buckets_1_to_3()
-        self._assign_bucket_4_and_5()
+        self._assign_bucket_4()
+        self._assign_bucket_5()
         self._assign_bucket_6()
         self._assign_bucket_7()
         self._assign_bucket_8()
-        self._assign_bucket_9()
 
         self._summarise_buckets()
 
@@ -857,13 +880,15 @@ class Protac_buckets(object):
                                    # 'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location',
                                    'Bucket_1_PROTAC', 'Bucket_2_PROTAC', 'Bucket_3_PROTAC', 
                                    'Bucket_4_PROTAC', 'Bucket_5_PROTAC', 'Bucket_6_PROTAC', 
-                                   'Bucket_7_PROTAC', 'Bucket_8_PROTAC', 'Bucket_9_PROTAC', 
+                                   'Bucket_7_PROTAC', 'Bucket_8_PROTAC', #'Bucket_9_PROTAC', 
                                    'Bucket_sum_PROTAC', 'Top_bucket_PROTAC',
-                                   # 'drug_chembl_ids_PROTAC',
+                                   # 'drug_chembl_ids_PROTAC', 'drug_names_PROTAC',
                                    'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean',
-                                   'Max_halflife',
-                                   'number_of_ubiquitination_sites', 'Uniprot_PTM', 'Uniprot_CrossLink', 
-                                   'full_id', 'compound_chembl_ids_PROTAC', 'PROTAC_location_Bucket'
+                                   'Max_halflife', 'Min_halflife',
+                                   'Uniprot_PTM', 'Uniprot_CrossLink', 
+                                   'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013', 'number_of_ubiquitination_sites', 
+                                   'full_id', 'compound_chembl_ids_PROTAC', #'pchembl_values_PROTAC', 
+                                   'PROTAC_location_Bucket'
                                    ]]
 
         # self.out_df.sort_values(['Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable'],
@@ -876,10 +901,13 @@ class Protac_buckets(object):
         #             self.out_df['Top_bucket_PROTAC'] < 10)]
 
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
         # self.out_df['drug_chembl_ids_PROTAC'].fillna('', inplace=True)
-        # self.out_df['drug_chembl_ids_PROTAC'] = self.out_df['drug_chembl_ids_PROTAC'].apply(lambda x: list(x.split(",")))
+        # self.out_df['drug_chembl_ids_PROTAC'] = self.out_df['drug_chembl_ids_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
         self.out_df['compound_chembl_ids_PROTAC'].fillna('', inplace=True)
-        self.out_df['compound_chembl_ids_PROTAC'] = self.out_df['compound_chembl_ids_PROTAC'].apply(lambda x: list(x.split(",")))
+        self.out_df['compound_chembl_ids_PROTAC'] = self.out_df['compound_chembl_ids_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        # self.out_df['pchembl_values_PROTAC'].fillna('', inplace=True)
+        # self.out_df['pchembl_values_PROTAC'] = self.out_df['pchembl_values_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
 
@@ -892,15 +920,15 @@ class Protac_buckets(object):
         return {
             'Bucket_scores': {'Bucket_1_PROTAC':d.Bucket_1_PROTAC, 'Bucket_2_PROTAC':d.Bucket_2_PROTAC, 'Bucket_3_PROTAC':d.Bucket_3_PROTAC, 
                               'Bucket_4_PROTAC':d.Bucket_4_PROTAC, 'Bucket_5_PROTAC':d.Bucket_5_PROTAC, 'Bucket_6_PROTAC':d.Bucket_6_PROTAC, 
-                              'Bucket_7_PROTAC':d.Bucket_7_PROTAC, 'Bucket_8_PROTAC':d.Bucket_8_PROTAC, 'Bucket_9_PROTAC':d.Bucket_9_PROTAC},
+                              'Bucket_7_PROTAC':d.Bucket_7_PROTAC, 'Bucket_8_PROTAC':d.Bucket_8_PROTAC}, #, 'Bucket_9_PROTAC':d.Bucket_9_PROTAC
             'Bucket_evaluation': {'Bucket_sum_PROTAC':d.Bucket_sum_PROTAC, 'Top_bucket_PROTAC':d.Top_bucket_PROTAC,
                                   'Clinical_Precedence_PROTAC':d.Clinical_Precedence_PROTAC}, #, 'Category_PROTAC':d.Category_PROTAC
-            'Bucket_evidences': {'Bucket_1-3_PROTAC': {'drug_chembl_ids_PROTAC':{}}, #{'drug_chembl_ids_PROTAC':d.drug_chembl_ids_PROTAC}, 
-                                 'Bucket_4-5_PROTAC': {'Max_halflife':d.Max_halflife}, 
+            'Bucket_evidences': {'Bucket_1-3_PROTAC': {'drug_chembl_ids_PROTAC':{}, 'drug_names_PROTAC':{}}, #{'drug_chembl_ids_PROTAC':d.drug_chembl_ids_PROTAC}, 
+                                 'Bucket_4_PROTAC': {'Max_halflife':d.Max_halflife, 'Min_halflife':d.Min_halflife}, 
+                                 'Bucket_5_PROTAC': {'Uniprot_PTM':d.Uniprot_PTM, 'Uniprot_CrossLink':d.Uniprot_CrossLink}, 
                                  'Bucket_6_PROTAC': {'number_of_ubiquitination_sites':d.number_of_ubiquitination_sites}, 
-                                 'Bucket_7_PROTAC': {'Uniprot_PTM':d.Uniprot_PTM, 'Uniprot_CrossLink':d.Uniprot_CrossLink}, 
-                                 'Bucket_8_PROTAC': {'full_id':d.full_id}, 
-                                 'Bucket_9_PROTAC': {'compound_chembl_ids_PROTAC':d.compound_chembl_ids_PROTAC}}
+                                 'Bucket_7_PROTAC': {'full_id':d.full_id}, 
+                                 'Bucket_8_PROTAC': {'compound_chembl_ids_PROTAC':d.compound_chembl_ids_PROTAC}}
             }
 
             

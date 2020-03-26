@@ -2,7 +2,10 @@
 from ot_tractability_pipeline_v2.queries_sm import CHEMBL_VERSION
 
 chembl_clinical_other = '''
-    SELECT DISTINCT mh.parent_molregno, di.efo_id, di.efo_term, di.max_phase_for_ind
+    SELECT DISTINCT mh.parent_molregno, 
+        di.efo_id, 
+        di.efo_term, 
+        di.max_phase_for_ind
     FROM {0}.molecule_dictionary md,
     	{0}.molecule_hierarchy mh,
     	{0}.drug_indication di

@@ -76,16 +76,17 @@ Bucket 9 (Human Protein Atlas) Targets with main location “Plasma membrane” 
 Bucket 1 (-) Targets with approved (phase 4) PROTAC drug  
 Bucket 2 (-) Targets with PROTAC in clinical phase 2 or 3  
 Bucket 3 (-) Targets with PROTAC in pre-clinical phase 1  
-Bucket 4 (Mathieson et al. 2018) Targets with max. half-life >24 hours  
-Bucket 5 (Mathieson et al. 2018) Targets with max. half-life 10-24 hours  
-Bucket 6 (Woong et al. 2011) Targets with known ubiquitination sites  
-Bucket 7 (UniProt) Targets with UniProt ubiquitination indication keyword:"Ubl conjugation [KW-0832]", which is manually curated from literature  
-Bucket 8 (Europe PMC) Targets mentioned in PROTAC literature  
-Bucket 9 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
+Bucket 4 (Mathieson et al. 2018) Targets with available half-life data  
+Bucket 5 (UniProt) Targets with UniProt keyword: "Ubl conjugation [KW-0832]"  
+Bucket 6 (PhosphoSitePlus, mUbiSiDa, Woong et al. 2011) Targets with reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa (2013) and [Woong et al. 2011]  
+Bucket 7 (Europe PMC) Targets mentioned in PROTAC literature  
+Bucket 8 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 
 PROTAC_location_Bucket  
 In addition to PROTAC tractability buckets, there is an additional "PROTAC_location_Bucket", which allows you to assess
-whether a target's location is suitable for the PROTAC approach. UniProt and GO locations are assessed. Here, good location = ['cytoplasm', 'cytosol', 'nucleus'], grey location = ['membrane'], and bad location = anywhere else. The PROTAC_location_Bucket score is defined by:  
+whether a target's location is suitable for the PROTAC approach. UniProt and GO locations are assessed.  
+Here, good location = ['cytoplasm', 'cytosol', 'nucleus'], grey location = ['membrane'], and bad location = anywhere else.  
+The PROTAC_location_Bucket score is defined by:  
 1 = High confidence good location  
 2 = Med confidence good location  
 3 = High confidence grey location  
