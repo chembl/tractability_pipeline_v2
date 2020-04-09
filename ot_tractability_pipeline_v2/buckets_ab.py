@@ -640,13 +640,11 @@ class Antibody_buckets(object):
         self.out_df.loc[(self.out_df['Top_bucket_ab'] <= 3), 'Category_ab'] = 'Clinical_Precedence_ab'
         self.out_df.loc[(self.out_df['Top_bucket_ab'] == 4) | (self.out_df['Top_bucket_ab'] == 5),
                         'Category_ab'] = 'Predicted_Tractable_ab_High_confidence'
-
         self.out_df.loc[
             (self.out_df['Top_bucket_ab'] == 6) | (self.out_df['Top_bucket_ab'] == 7) | (
                     self.out_df['Top_bucket_ab'] == 8) | (self.out_df['Top_bucket_ab'] == 9),
             'Category_ab'] = 'Predicted_Tractable_ab_Medium_to_low_confidence'
 
-        # self.out_df = self.out_df[(self.out_df['Top_bucket'] < 9 ) | (self.out_df['Top_bucket_ab'] < 10) ]
 
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"

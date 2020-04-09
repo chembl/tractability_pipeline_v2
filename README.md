@@ -78,7 +78,7 @@ Bucket 2 (-) Targets with PROTAC in clinical phase 2 or 3
 Bucket 3 (-) Targets with PROTAC in pre-clinical phase 1  
 Bucket 4 (Mathieson et al. 2018) Targets with available half-life data  
 Bucket 5 (UniProt) Targets with UniProt keyword: "Ubl conjugation [KW-0832]"  
-Bucket 6 (PhosphoSitePlus, mUbiSiDa, Woong et al. 2011) Targets with reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa (2013) and [Woong et al. 2011]  
+Bucket 6 (PhosphoSitePlus, mUbiSiDa, Woong et al. 2011) Targets with reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa (2013), or [Woong et al. 2011]  
 Bucket 7 (Europe PMC) Targets mentioned in PROTAC literature  
 Bucket 8 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 

@@ -243,6 +243,11 @@ def main(args=None):
     if store_fetched:
         out_buckets.to_csv('{}/tractability_buckets_{}.tsv'.format(store_fetched,d), sep='\t', index=False)
 
+    # drop entries without UniProt 'accession'
+    out_buckets.dropna(subset=['accession'], inplace=True)
+
+    # reduced output omitting targets missing all buckets (in all workflows)
+    #out_buckets_filled = out_buckets[(out_buckets['Top_bucket_sm'] < 10) | (out_buckets['Top_bucket_ab'] < 10) | (out_buckets['Top_bucket_PROTAC'] < 10) | (out_buckets['Top_bucket_othercl'] < 10)]
 
 
     # =========================================================================

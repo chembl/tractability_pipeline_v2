@@ -634,12 +634,13 @@ class Small_molecule_buckets(object):
         self.out_df.loc[(self.out_df['Top_bucket_sm'] <= 3), 'Category_sm'] = 'Clinical_Precedence_sm'
         self.out_df.loc[(self.out_df['Top_bucket_sm'] == 4) | (self.out_df['Top_bucket_sm'] == 7),
                         'Category_sm'] = 'Discovery_Precedence_sm'
-        # self.out_df.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm'],
-        #                         ascending=[False, False, False], inplace=True)
-
         self.out_df.loc[
             (self.out_df['Top_bucket_sm'] == 5) | (self.out_df['Top_bucket_sm'] == 6) | (self.out_df['Top_bucket_sm'] == 8),
             'Category_sm'] = 'Predicted_Tractable_sm'
+
+        # self.out_df.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm'],
+        #                         ascending=[False, False, False], inplace=True)
+
         
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
