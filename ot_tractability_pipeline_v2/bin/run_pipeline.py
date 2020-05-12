@@ -122,7 +122,7 @@ def main(args=None):
     if args is None:
         #--------------------------------
         ## for debugging:
-        #sys.argv = 'script.py /Users/melanie/tractability_project/tractability_pipeline_v2/input_genelists/19.11_target_list.csv'.split()
+        #sys.argv = 'script.py /Users/melanie/tractability_project/tractability_pipeline_v2/input_genelists/20.04_target_list.csv'.split()
         #sys.argv = 'script.py /Users/melanie/tractability_project/tractability_pipeline_v2/input_genelists/test01.csv'.split()
         #--------------------------------
         args = sys.argv[1:]
@@ -131,14 +131,14 @@ def main(args=None):
     parser = argparse.ArgumentParser(description='Assess tractability of gene list')
     parser.add_argument('genes',
                         help='A file of Ensembl Gene IDs, one per line and no header')
-    parser.add_argument('--db',
-                        help='Address to your local ChEMBL installation. Preferred method is to set the CHEMBL_DB environment variable',
-                        default=None)
-    
-    parser.add_argument('--out_file', default='tractability_buckets.tsv',
-                        help='Name of output csv file')
+    parser.add_argument('--workflows_to_run', default='all',
+                        help='Workflows to be run - options are: "all"(default), "sm_ab_othercl", "sm_protac_othercl" and "sm_othercl"')
+    parser.add_argument('--db', default=None,
+                        help='Address to your local ChEMBL installation. Preferred method is to set the CHEMBL_DB environment variable')    
     parser.add_argument('--store_fetched_data', default=True,
-                        help='Store data fetched from external resources, good habit for future troubleshooting')
+                        help='Store data fetched from external resources, good habit for future troubleshooting - bool, default True')
+#    parser.add_argument('--out_file', default='tractability_buckets.tsv',
+#                        help='Name of output csv file, default "tractability_buckets.tsv"')
     
     args = parser.parse_args()
     
@@ -163,6 +163,11 @@ def main(args=None):
         os.mkdir(fn)
         store_fetched = fn
     else: store_fetched = False 
+
+    # check workflows_to_run 
+    if args.workflows_to_run not in ['all','sm_ab_othercl','sm_protac_othercl','sm_othercl']:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
     
 # =============================================================================
 #     run(ensembl_id_list, database_url, out_file_name=args.out_file, store_fetched=store_fetched)
@@ -188,28 +193,31 @@ def main(args=None):
     print("\nThe Small Molecule workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_sm.tsv'.\n".format(store_fetched,d), sep='\t')
 
     # Get antibody tractability info
-    print("\nRunning the Antibody workflow...\n")
-    ab = Antibody_buckets(setup, database_url=database_url)
-    out_buckets_ab = ab.assign_buckets()
-    print(out_buckets_ab.groupby('Top_bucket_ab')['accession'].count())
-    if store_fetched: out_buckets_ab.to_csv('{}/tractability_buckets_{}_ab.tsv'.format(store_fetched,d), sep='\t')
-    print("\nThe Antibody workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_ab.tsv'.\n".format(store_fetched,d), sep='\t')
+    if args.workflows_to_run in ['all','sm_ab_othercl']:
+        print("\nRunning the Antibody workflow...\n")
+        ab = Antibody_buckets(setup, database_url=database_url)
+        out_buckets_ab = ab.assign_buckets()
+        print(out_buckets_ab.groupby('Top_bucket_ab')['accession'].count())
+        if store_fetched: out_buckets_ab.to_csv('{}/tractability_buckets_{}_ab.tsv'.format(store_fetched,d), sep='\t')
+        print("\nThe Antibody workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_ab.tsv'.\n".format(store_fetched,d), sep='\t')
 
     # Get protac tractability info
-    print("\nRunning the PROTAC workflow...\n")
-    protac = Protac_buckets(setup, database_url=database_url)
-    out_buckets_protac = protac.assign_buckets()
-    print(out_buckets_protac.groupby('Top_bucket_PROTAC')['accession'].count())
-    if store_fetched: out_buckets_protac.to_csv('{}/tractability_buckets_{}_protac.tsv'.format(store_fetched,d), sep='\t')
-    print("\nThe PROTAC workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_protac.tsv'.\n".format(store_fetched,d), sep='\t')
+    if args.workflows_to_run in ['all','sm_protac_othercl']:
+        print("\nRunning the PROTAC workflow...\n")
+        protac = Protac_buckets(setup, database_url=database_url)
+        out_buckets_protac = protac.assign_buckets()
+        print(out_buckets_protac.groupby('Top_bucket_PROTAC')['accession'].count())
+        if store_fetched: out_buckets_protac.to_csv('{}/tractability_buckets_{}_protac.tsv'.format(store_fetched,d), sep='\t')
+        print("\nThe PROTAC workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_protac.tsv'.\n".format(store_fetched,d), sep='\t')
 
     # Get other clinical info
-    print("\nRunning the OtherClinical workflow...\n")
-    othercl = Othercl_buckets(setup, database_url=database_url)
-    out_buckets_othercl = othercl.assign_buckets()
-    print(out_buckets_othercl.groupby('Top_bucket_othercl')['accession'].count())
-    if store_fetched: out_buckets_othercl.to_csv('{}/tractability_buckets_{}_othercl.tsv'.format(store_fetched,d), sep='\t')
-    print("\nThe OtherClinical workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_othercl.tsv'.\n".format(store_fetched,d), sep='\t')
+    if args.workflows_to_run in ['all','sm_ab_othercl','sm_protac_othercl','sm_othercl']:
+        print("\nRunning the OtherClinical workflow...\n")
+        othercl = Othercl_buckets(setup, database_url=database_url)
+        out_buckets_othercl = othercl.assign_buckets()
+        print(out_buckets_othercl.groupby('Top_bucket_othercl')['accession'].count())
+        if store_fetched: out_buckets_othercl.to_csv('{}/tractability_buckets_{}_othercl.tsv'.format(store_fetched,d), sep='\t')
+        print("\nThe OtherClinical workflow run successfully. \nThe results are saved in '{}/tractability_buckets_{}_othercl.tsv'.\n".format(store_fetched,d), sep='\t')
 
 
 
@@ -219,26 +227,66 @@ def main(args=None):
     # =============================================================================
     # try:
     # if out_buckets_sm and out_buckets_ab and out_buckets_protac and out_buckets_othercl:
-            
-    out_buckets = pd.concat([out_buckets_sm, out_buckets_ab, out_buckets_protac, out_buckets_othercl], axis=1, sort=False)
+    
+    #data_frames = [out_buckets_sm, out_buckets_ab, out_buckets_protac, out_buckets_othercl]
+    if args.workflows_to_run == 'all':
+        other_frames = [out_buckets_ab.drop(columns=['accession', 'symbol']), out_buckets_protac.drop(columns=['accession', 'symbol']), out_buckets_othercl.drop(columns=['accession', 'symbol'])]
+#        data_frames = [out_buckets_sm, out_buckets_ab, out_buckets_protac, out_buckets_othercl]
+    elif args.workflows_to_run == 'sm_ab_othercl':
+        other_frames = [out_buckets_ab.drop(columns=['accession', 'symbol']), out_buckets_othercl.drop(columns=['accession', 'symbol'])]
+#        data_frames = [out_buckets_sm, out_buckets_ab, out_buckets_othercl]
+    elif args.workflows_to_run == 'sm_protac_othercl':
+        other_frames = [out_buckets_protac.drop(columns=['accession', 'symbol']), out_buckets_othercl.drop(columns=['accession', 'symbol'])]
+#        data_frames = [out_buckets_sm, out_buckets_protac, out_buckets_othercl]
+    elif args.workflows_to_run == 'sm_othercl':
+        other_frames = [out_buckets_othercl.drop(columns=['accession', 'symbol'])]
+#        data_frames = [out_buckets_sm, out_buckets_othercl]
+    
+    # combining workflow output data frames
+#    out_buckets = pd.concat(data_frames, axis=1, join='outer', sort=False)
 
-    # Remove duplicated columns (such as 'symbol', 'accession')
-    out_buckets = out_buckets.loc[:,~out_buckets.columns.duplicated()]
-
-    # sorting output dataframe
-    out_buckets.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm',
-                              'Clinical_Precedence_ab', 'Predicted_Tractable_ab_High_confidence', 'Predicted_Tractable_ab_Medium_to_low_confidence',
-                              'Top_bucket_PROTAC', 'PROTAC_location_Bucket',
-                              'Clinical_Precedence_othercl'],
-                            ascending=[False, False, False,
-                                        False, False, False,
-                                        True, True, 
-                                        False], inplace=True)
-
+    out_buckets = out_buckets_sm.join(other_frames, how='left', sort=False)
 
     out_buckets.reset_index(inplace=True)
     out_buckets.rename(columns={'index': 'ensembl_gene_id'}, inplace=True)
     
+    # Remove duplicated columns (such as 'symbol', 'accession')
+    out_buckets = out_buckets.loc[:,~out_buckets.columns.duplicated()]
+
+    # sorting output dataframe
+    if args.workflows_to_run == 'all':
+        out_buckets.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm',
+                                  'Clinical_Precedence_ab', 'Predicted_Tractable_ab_High_confidence', 'Predicted_Tractable_ab_Medium_to_low_confidence',
+                                  'Top_bucket_PROTAC', 'PROTAC_location_Bucket',
+                                  'Clinical_Precedence_othercl'],
+                                ascending=[False, False, False,
+                                           False, False, False,
+                                           True, True, 
+                                           False], inplace=True)
+
+    if args.workflows_to_run == 'sm_ab_othercl':
+        out_buckets.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm',
+                                  'Clinical_Precedence_ab', 'Predicted_Tractable_ab_High_confidence', 'Predicted_Tractable_ab_Medium_to_low_confidence',
+                                  'Clinical_Precedence_othercl'],
+                                ascending=[False, False, False,
+                                           False, False, False,
+                                           False], inplace=True)
+
+    if args.workflows_to_run == 'sm_protac_othercl':
+        out_buckets.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm',
+                                  'Top_bucket_PROTAC', 'PROTAC_location_Bucket',
+                                  'Clinical_Precedence_othercl'],
+                                ascending=[False, False, False,
+                                           True, True, 
+                                           False], inplace=True)
+
+    if args.workflows_to_run == 'sm_othercl':
+        out_buckets.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm',
+                                  'Clinical_Precedence_othercl'],
+                                ascending=[False, False, False,
+                                           False], inplace=True)
+
+    # save final output to tsv
     out_buckets.to_csv('tractability_buckets_{}.tsv'.format(d), sep='\t', index=False)
     if store_fetched:
         out_buckets.to_csv('{}/tractability_buckets_{}.tsv'.format(store_fetched,d), sep='\t', index=False)
@@ -250,33 +298,35 @@ def main(args=None):
     #out_buckets_filled = out_buckets[(out_buckets['Top_bucket_sm'] < 10) | (out_buckets['Top_bucket_ab'] < 10) | (out_buckets['Top_bucket_PROTAC'] < 10) | (out_buckets['Top_bucket_othercl'] < 10)]
 
 
+    print("\nThe results from all workflows are concatenated and saved\
+          \n\t- as table in './tractability_buckets_{}.tsv'".format(d), sep='\t')
+
     # =========================================================================
     # Transforming output DataFrame into json format
     # =========================================================================
+    if args.workflows_to_run == 'all':
 
-    with open("./tractability_buckets_{}.json".format(d),"w") as h:
-        for idx,r in out_buckets.iterrows():
-            gene = {"ensembl_gene_id":r['ensembl_gene_id']}
-            gene["SM"] = sm.sm2json(r)
-            gene["AB"] = ab.ab2json(r)
-            gene["PROTAC"] = protac.protac2json(r)
-            gene["othercl"] = othercl.othercl2json(r)
-            json.dump(gene, h)
+        with open("./tractability_buckets_{}.json".format(d),"w") as h:
+            for idx,r in out_buckets.iterrows():
+                gene = {"ensembl_gene_id":r['ensembl_gene_id']}
+                gene["SM"] = sm.sm2json(r)
+                gene["AB"] = ab.ab2json(r)
+                gene["PROTAC"] = protac.protac2json(r)
+                gene["othercl"] = othercl.othercl2json(r)
+                json.dump(gene, h)
+    
+        with open("./tractability_buckets_{}_no_PROTAC.json".format(d),"w") as h:
+            for idx,r in out_buckets.iterrows():
+                gene = {"ensembl_gene_id":r['ensembl_gene_id']}
+                gene["SM"] = sm.sm2json(r)
+                gene["AB"] = ab.ab2json(r)
+                # gene["PROTAC"] = protac.protac2json(r)
+                gene["othercl"] = othercl.othercl2json(r)
+                json.dump(gene, h)
 
-    with open("./tractability_buckets_{}_no_PROTAC.json".format(d),"w") as h:
-        for idx,r in out_buckets.iterrows():
-            gene = {"ensembl_gene_id":r['ensembl_gene_id']}
-            gene["SM"] = sm.sm2json(r)
-            gene["AB"] = ab.ab2json(r)
-            # gene["PROTAC"] = protac.protac2json(r)
-            gene["othercl"] = othercl.othercl2json(r)
-            json.dump(gene, h)
 
-
-    print("\nThe results from all workflows are concatenated and saved\
-          \n\t- as table in './tractability_buckets_{}.tsv'\
-          \n\t- as json in './tractability_buckets_{}.json'.\
-              \n".format(d,d), sep='\t')
+        print("\t- as json in './tractability_buckets_{}.json'.\
+                  \n".format(d), sep='\t')
 
                  
 

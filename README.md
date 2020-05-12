@@ -16,8 +16,8 @@ Information is provided for different potential drug modalities, which are subdi
 **Output format**  
 The pipeline has two main outputs: 
 1) a **TSV** file (table) with one target per row and bucket data as columns, 
-2) a **JSON** data structure (generated from the table output) with a hyrarchical/nested data structure, relating the evidence to the buckets:  
-    {$gene: {$modality: {'Bucket_scores': {...}, 'Bucket_evaluation': {...}, 'Bucket_evidences': {...}}}}
+2) a **JSON** data structure (generated from the table output) with a hierarchical/nested data structure, relating the evidence to the buckets:  
+    {"ensembl_gene_id":{...}, {$modality: {'Bucket_scores':{...}, 'Bucket_evaluation':{...}, 'Category_scores':{...}, 'Category_evaluation':{...}, 'Bucket_evidences':{...}}}}  
 Additionaly the data fetched during execution is saved into a 'fetched data' folder (default).
 
 
@@ -65,11 +65,11 @@ Not implemented: Bucket 9 (SureChEMBL) Targets with ‘chemical’ patents in th
 Bucket 1 (ChEMBL) Targets with approved (phase 4) AB drug  
 Bucket 2 (ChEMBL) Targets with AB in clinical phase 2 or 3  
 Bucket 3 (ChEMBL) Targets with AB in pre-clinical phase 1  
-Bucket 4 (UniProt loc) Targets in “Cell membrane” or “Secreted” - high confidence  
-Bucket 5 (GO CC) Targets with GO CC terms indicative for plasma membrane, extracellular region/matrix, or secretion - high confidence  
-Bucket 6 (UniProt loc) Targets in “Cell membrane” or “Secreted” - medium confidence  
+Bucket 4 (UniProt loc) Targets with UniProt 'Subcellular location' terms indicative for plasma membrane, extracellular region/matrix, or secretion - high confidence  
+Bucket 5 (GO CC) Targets with GO 'Cellular component' terms indicative for plasma membrane, extracellular region/matrix, or secretion - high confidence [‘ECO:0000269’ or ‘ECO:0000305’] 
+Bucket 6 (UniProt loc) Targets with UniProt 'Subcellular location' terms indicative for plasma membrane, extracellular region/matrix, or secretion - medium confidence  
 Bucket 7 (UniProt SigP or TMHMM): Targets with predicted Signal Peptide or Trans-membrane regions, and not destined to organelles  
-Bucket 8 (GO CC) Targets with GO CC terms indicative for plasma membrane, extracellular region/matrix, or secretion - medium confidence  
+Bucket 8 (GO CC) Targets with GO 'Cellular component' terms indicative for plasma membrane, extracellular region/matrix, or secretion - medium confidence  
 Bucket 9 (Human Protein Atlas) Targets with main location “Plasma membrane” - high confidence
 
 #### PROTAC buckets

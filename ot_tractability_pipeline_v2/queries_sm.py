@@ -16,10 +16,15 @@ except TypeError:
 chembl_clinical_small_mol = """
     SELECT DISTINCT mh.parent_molregno, 
         md.molregno, 
-        md.pref_name
+        md.pref_name,
+        di.efo_id, 
+        di.efo_term, 
+        di.max_phase_for_ind
     FROM {0}.molecule_dictionary md,
-        {0}.molecule_hierarchy mh
+    	{0}.molecule_hierarchy mh,
+    	{0}.drug_indication di
     WHERE md.molregno = mh.molregno
+    AND md.molregno = di.molregno
     
     AND md.molecule_type = 'Small molecule'
         """.format(CHEMBL_VERSION)
@@ -28,7 +33,7 @@ chembl_clinical_targets = """
     SELECT DISTINCT mh.parent_molregno, 
         md.chembl_id AS drug_chembl_id,
         md.pref_name AS drug_name, 
-        dt.development_phase AS max_phase,
+        md.max_phase,
         td.tid,
         td.chembl_id AS target_chembl_id,
         td.pref_name AS target_name, 
@@ -37,20 +42,19 @@ chembl_clinical_targets = """
         dm.action_type AS moa_chembl,
         mr.ref_type,
         mr.ref_id,
-        mr.ref_url
+        mr.ref_url,
+    	dm.site_id
     FROM {0}.molecule_dictionary md,
         {0}.molecule_hierarchy mh,
         {0}.drug_mechanism dm,
         {0}.target_dictionary td,
         {0}.target_components tc,
         {0}.component_sequences cs,
-        {0}.mechanism_refs mr,
-        CHEMBL_APP.drug_targets_mv dt
+        {0}.mechanism_refs mr
     WHERE md.molregno = dm.molregno
     AND md.molregno = mh.molregno
     AND dm.tid = td.tid
     AND td.tid = tc.tid
-    AND dt.tid = tc.tid
     AND tc.component_id = cs.component_id
     AND dm.mec_id = mr.mec_id
     

@@ -18,7 +18,7 @@ Created on Mon Feb  3 10:38:51 2020
 import sys
 
 # import mygene
-# import numpy as np
+import numpy as np
 import pandas as pd
 import pkg_resources
 # from sqlalchemy import create_engine
@@ -140,8 +140,6 @@ class Othercl_buckets(object):
         self.all_chembl_targets = pd.read_sql_query(chembl_clinical_other_targets, self.engine)
         self.all_chembl_targets.loc[self.all_chembl_targets['ref_type'] == 'Expert', ['ref_id', 'ref_url']] = 'NA'
 
-        #
-
         self._process_protein_complexes()
 
         othercl_info = pd.read_sql_query(chembl_clinical_other, self.engine)
@@ -151,9 +149,15 @@ class Othercl_buckets(object):
             self.all_chembl_targets.to_csv("{}/othercl_all_chembl_targets.csv".format(self.store_fetched))
 
         # Make sure max phase is for correct indication
-
         self.all_chembl_targets = self.all_chembl_targets[
             self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
+
+        # pre-processing groupby on two columns to get highest max_phase by drug (and target)
+        f0 = {x: 'first' for x in self.all_chembl_targets.columns if x not in ['accession','drug_chembl_id']}
+        f0['max_phase_for_ind'] = 'max'
+        f0['max_phase'] = 'max'
+
+        self.all_chembl_targets = self.all_chembl_targets.groupby(['accession','drug_chembl_id'], as_index=False).agg(f0)
 
         def set_as_tuple(x):
             return tuple(x)
@@ -162,11 +166,15 @@ class Othercl_buckets(object):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
             return ",".join([y for y in x if isinstance(y,str) and y])
 
+        # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
+        self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase_for_ind'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
+
         f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f['max_phase_for_ind'] = 'max'
         f['max_phase'] = 'max'
         f['drug_chembl_id'] = set_strings
         f['drug_name'] = set_strings
+        f['clinical_phase'] = set_strings
 
         self.all_chembl_targets = self.all_chembl_targets.groupby('accession', as_index=False).agg(f)
 
@@ -182,13 +190,15 @@ class Othercl_buckets(object):
         f['max_phase_for_ind'] = 'max'
         f['drug_chembl_id'] = set_strings
         f['drug_name'] = set_strings
+        f['clinical_phase'] = set_strings
 
         self.out_df = self.out_df.groupby(['ensembl_gene_id'], as_index=False).agg(f)
 
         # self.out_df.to_csv("{}/othercl_out_df_checkpoint2.csv".format(self.store_fetched), index=False)
 
         self.out_df.rename(columns = {'drug_chembl_id':'drug_chembl_ids_othercl',
-                                      'drug_name':'drug_names_othercl'}, inplace = True)
+                                      'drug_name':'drug_names_othercl',
+                                      'clinical_phase':'clinical_phases_othercl'}, inplace = True)
         
         self.out_df['Bucket_1_othercl'] = 0
         self.out_df['Bucket_2_othercl'] = 0
@@ -270,7 +280,7 @@ class Othercl_buckets(object):
                                    # 'full_id', 'PROTAC_location_Bucket',
                                    'Bucket_1_othercl', 'Bucket_2_othercl', 'Bucket_3_othercl',
                                    'Bucket_sum_othercl', 'Top_bucket_othercl', 
-                                   'drug_chembl_ids_othercl', 'drug_names_othercl'
+                                   'drug_chembl_ids_othercl', 'drug_names_othercl', 'clinical_phases_othercl'
                                    ]]
 
         # self.out_df.sort_values(['Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable'],
@@ -279,8 +289,8 @@ class Othercl_buckets(object):
         # Score each category, and label highest category
         self.out_df['Clinical_Precedence_othercl'] = self.out_df.apply(self._clinical_precedence, axis=1)
 
-        # self.out_df['Category_othercl'] = 'Unknown'
-        # self.out_df.loc[(self.out_df['Top_bucket_othercl'] <= 3), 'Category_othercl'] = 'Clinical_Precedence_othercl'
+        self.out_df['Category_othercl'] = 'Unknown'
+        self.out_df.loc[(self.out_df['Top_bucket_othercl'] <= 3), 'Category_othercl'] = 'Clinical_Precedence_othercl'
         # self.out_df.loc[(self.out_df['Top_bucket_othercl'] == 4) | (self.out_df['Top_bucket_othercl'] == 5),
         #                 'Category_othercl'] = 'Predicted_Tractable__High_confidence'
         # self.out_df.loc[(self.out_df['Top_bucket_othercl'] == 6) | (self.out_df['Top_bucket_othercl'] == 7) | (
@@ -289,11 +299,18 @@ class Othercl_buckets(object):
 
         # self.out_df = self.out_df[(self.out_df['Top_bucket'] < 9 ) | (self.out_df['Top_bucket_ab'] < 10) | (self.out_df['Top_bucket_othercl'] < 10) ]
 
+        # Cleaning columns
+        self.out_df['drug_chembl_ids_othercl'].fillna('', inplace=True)
+        self.out_df['drug_names_othercl'].fillna('', inplace=True)
+        self.out_df['clinical_phases_othercl'].fillna('', inplace=True)
+
+        # create dictionaries from 'drug_chembl_ids_' and 'clinical_phases_'/'drug_names_'
+        self.out_df['drug_names_dict_othercl'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_othercl'].split(","), row['drug_names_othercl'].split(","))), axis=1)
+        self.out_df['clinical_phases_dict_othercl'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_othercl'].split(","), row['clinical_phases_othercl'].split(","))), axis=1)
+
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
-        self.out_df['drug_chembl_ids_othercl'].fillna('', inplace=True)
         self.out_df['drug_chembl_ids_othercl'] = self.out_df['drug_chembl_ids_othercl'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        self.out_df['drug_names_othercl'].fillna('', inplace=True)
         self.out_df['drug_names_othercl'] = self.out_df['drug_names_othercl'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
@@ -306,9 +323,11 @@ class Othercl_buckets(object):
     def othercl2json(d):
         return {
             'Bucket_scores': {'Bucket_1_othercl':d.Bucket_1_othercl, 'Bucket_2_othercl':d.Bucket_2_othercl, 'Bucket_3_othercl':d.Bucket_3_othercl},
-            'Bucket_evaluation': {'Bucket_sum_othercl':d.Bucket_sum_othercl, 'Top_bucket_othercl':d.Top_bucket_othercl,
-                                  'Clinical_Precedence_othercl':d.Clinical_Precedence_othercl}, #, 'Category_othercl':d.Category_othercl},
-            'Bucket_evidences': {'Bucket_1-3_othercl': {'drug_chembl_ids_othercl':d.drug_chembl_ids_othercl, 'drug_names_othercl':d.drug_names_othercl}}
+            'Bucket_evaluation': {'Bucket_sum_othercl':d.Bucket_sum_othercl, 'Top_bucket_othercl':d.Top_bucket_othercl},
+            'Category_scores': {'Clinical_Precedence_othercl':d.Clinical_Precedence_othercl}, 
+            'Category_evaluation': {'Top_Category_othercl':d.Category_othercl},
+#            'Bucket_evidences': {'Bucket_1_2_3_othercl': {'drug_chembl_ids_othercl':d.drug_chembl_ids_othercl, 'drug_names_othercl':d.drug_names_othercl}}
+            'Bucket_evidences': {'Bucket_1_2_3_othercl': {'drugs_in_clinic':d.drug_names_dict_othercl, 'max_clinical_phase':d.clinical_phases_dict_othercl}}
             }
 
             

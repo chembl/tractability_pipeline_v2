@@ -129,7 +129,11 @@ class Small_molecule_buckets(object):
 
         # print("\t- Querying ChEMBL...")
         small_mol_info = pd.read_sql_query(chembl_clinical_small_mol, self.engine)
+        if self.store_fetched: 
+            small_mol_info.to_csv("{}/sm_all_chembl_clinical_small_mol_check1.csv".format(self.store_fetched))
         self.all_chembl_targets = pd.read_sql_query(chembl_clinical_targets, self.engine)
+        if self.store_fetched: 
+            self.all_chembl_targets.to_csv("{}/sm_all_chembl_clinical_targets_check2.csv".format(self.store_fetched))
         self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')
 
         if self.store_fetched: 
@@ -145,28 +149,28 @@ class Small_molecule_buckets(object):
         pc = self.all_chembl_targets[self.all_chembl_targets['target_type'].str.contains("PROTEIN COMPLEX")]
         not_pc = self.all_chembl_targets[~self.all_chembl_targets['target_type'].str.contains("PROTEIN COMPLEX")]
 
-        n = 1000
-        targets = pc['tid'].unique()
-        chunks = [targets[i:i + n] for i in range(0, len(targets), n)]
-
-        df_list = []
-
-        # Check if binding sites are defined
-        for chunk in chunks:
-            q = '''
-            select distinct bs.site_id, td.tid 
-            from {0}.target_dictionary td, {0}.binding_sites bs
-            where td.tid = bs.tid and td.tid IN {1}
-            '''.format(CHEMBL_VERSION, tuple(chunk))
-            df_list.append(pd.read_sql_query(q, self.engine))
-
-        # Merge will set those with unknown binding site as NAN
-        binding_site_info = pd.concat(df_list, sort=False)
-
-        if self.store_fetched: 
-            binding_site_info.to_csv("{}/sm_chembl_binding_site_info.csv".format(self.store_fetched))
-
-        pc = pc.merge(binding_site_info, how='left', on='tid')
+#        n = 1000
+#        targets = pc['tid'].unique()
+#        chunks = [targets[i:i + n] for i in range(0, len(targets), n)]
+#
+#        df_list = []
+#
+#        # Check if binding sites are defined
+#        for chunk in chunks:
+#            q = '''
+#            select distinct bs.site_id, td.tid 
+#            from {0}.target_dictionary td, {0}.binding_sites bs
+#            where td.tid = bs.tid and td.tid IN {1}
+#            '''.format(CHEMBL_VERSION, tuple(chunk))
+#            df_list.append(pd.read_sql_query(q, self.engine))
+#
+#        # Merge will set those with unknown binding site as NAN
+#        binding_site_info = pd.concat(df_list, sort=False)
+#
+#        if self.store_fetched: 
+#            binding_site_info.to_csv("{}/sm_chembl_binding_site_info.csv".format(self.store_fetched))
+#
+#        pc = pc.merge(binding_site_info, how='left', on='tid')
         defined = pc[pc['site_id'].notnull()]
         undefined = pc[~pc['site_id'].notnull()]
 
@@ -217,26 +221,50 @@ class Small_molecule_buckets(object):
 
         self.gene_xref = self.id_xref[['accession', 'ensembl_gene_id', 'symbol']]
 
-        self.out_df = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
-
-        self.clinical_evidence = self.out_df
+        self.clinical_evidence = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
+#        self.out_df = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
+#        self.clinical_evidence = self.out_df
 
         self.clinical_evidence.to_csv("{}/sm_clinical_evidence.csv".format(self.store_fetched), index=False)
 
-        self.out_df.drop(['component_id', 'ref_id', 'ref_type', 'tid', 'molregno',
+        self.clinical_evidence.drop(['component_id', 'ref_id', 'ref_type', 'tid', 'molregno',
                           'parent_molregno', 'ref_url'], axis=1, inplace=True)
 
-        f = {x: 'first' for x in self.out_df.columns}
+        # Make sure max phase is for correct indication
+        self.clinical_evidence = self.clinical_evidence[
+            self.clinical_evidence['max_phase'] == self.clinical_evidence['max_phase_for_ind']]
+
+        # pre-processing groupby on two columns to get highest max_phase by drug (and target)
+        f0 = {x: 'first' for x in self.clinical_evidence.columns if x not in ['ensembl_gene_id','drug_chembl_id']}
+        f0['max_phase_for_ind'] = 'max'
+        f0['max_phase'] = 'max'
+        
+        # as groupby().agg('first') excludes rows with empty column value (nan) - need to fillna and replace afterwards
+#        self.clinical_evidence = self.clinical_evidence.groupby([self.clinical_evidence['ensembl_gene_id'],
+#                                                                 self.clinical_evidence['drug_chembl_id'].fillna('tmp')
+#                                                                 ], as_index=False).agg(f0).replace({'drug_chembl_id':{'tmp': np.nan}})
+        self.clinical_evidence = self.clinical_evidence.groupby(['ensembl_gene_id', 'drug_chembl_id'], as_index=False).agg(f0)
+
+        self.out_df = self.gene_xref.merge(self.clinical_evidence.drop(['accession', 'symbol'], axis=1), how='outer', on='ensembl_gene_id')
+
+        # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
+        self.out_df['clinical_phase'] = self.out_df['max_phase'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
+
+
+        f = {x: 'first' for x in self.out_df.columns if x != 'ensembl_gene_id'}
+        f['max_phase_for_ind'] = 'max'
         f['max_phase'] = 'max'
         f['pref_name'] = set_as_tuple
         f['moa_chembl'] = set_as_tuple
         f['drug_chembl_id'] = set_strings
         f['drug_name'] = set_strings
+        f['clinical_phase'] = set_strings
 
-        self.out_df = self.out_df.groupby(['ensembl_gene_id']).agg(f).reset_index(drop=True)
+        self.out_df = self.out_df.groupby(['ensembl_gene_id'], as_index=False).agg(f)#.reset_index(drop=True)
 
         self.out_df.rename(columns = {'drug_chembl_id':'drug_chembl_ids_sm',
-                                      'drug_name':'drug_names_sm'}, inplace = True)
+                                      'drug_name':'drug_names_sm',
+                                      'clinical_phase':'clinical_phases_sm'}, inplace = True)
         
         self.out_df['Bucket_1_sm'] = 0
         self.out_df['Bucket_2_sm'] = 0
@@ -620,7 +648,7 @@ class Small_molecule_buckets(object):
                                    'Bucket_4_sm', 'Bucket_5_sm', 'Bucket_6_sm', 
                                    'Bucket_7_sm', 'Bucket_8_sm', 
                                    'Bucket_sum_sm', 'Top_bucket_sm',
-                                   'drug_chembl_ids_sm', 'drug_names_sm',
+                                   'drug_chembl_ids_sm', 'drug_names_sm', 'clinical_phases_sm',
                                    'DrugEBIlity_score', 'High_Quality_ChEMBL_compounds', 'Small_Molecule_Druggable_Genome_Member', 'PDB_Known_Ligand', 
                                    ]]
 
@@ -641,14 +669,20 @@ class Small_molecule_buckets(object):
         # self.out_df.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm'],
         #                         ascending=[False, False, False], inplace=True)
 
+        # Cleaning columns
+        self.out_df['drug_chembl_ids_sm'].fillna('', inplace=True)
+        self.out_df['drug_names_sm'].fillna('', inplace=True)
+        self.out_df['clinical_phases_sm'].fillna('', inplace=True)
+
+        # create dictionaries from 'drug_chembl_ids_sm' and 'clinical_phases_sm'/'drug_names_sm'
+        self.out_df['drug_names_dict_sm'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_sm'].split(","), row['drug_names_sm'].split(","))), axis=1)
+        self.out_df['clinical_phases_dict_sm'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_sm'].split(","), row['clinical_phases_sm'].split(","))), axis=1)
         
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
-        self.out_df['drug_chembl_ids_sm'].fillna('', inplace=True)
         self.out_df['drug_chembl_ids_sm'] = self.out_df['drug_chembl_ids_sm'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        self.out_df['drug_names_sm'].fillna('', inplace=True)
         self.out_df['drug_names_sm'] = self.out_df['drug_names_sm'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        
+       
         print(self.out_df.columns)
 
         # return self.out_df
@@ -662,14 +696,16 @@ class Small_molecule_buckets(object):
             'Bucket_scores': {'Bucket_1_sm':d.Bucket_1_sm, 'Bucket_2_sm':d.Bucket_2_sm, 'Bucket_3_sm':d.Bucket_3_sm, 
                               'Bucket_4_sm':d.Bucket_4_sm, 'Bucket_5_sm':d.Bucket_5_sm, 'Bucket_6_sm':d.Bucket_6_sm, 
                               'Bucket_7_sm':d.Bucket_7_sm, 'Bucket_8_sm':d.Bucket_8_sm}, #, 'Bucket_9_sm':d.Bucket_9_sm
-            'Bucket_evaluation': {'Bucket_sum_sm':d.Bucket_sum_sm, 'Top_bucket_sm':d.Top_bucket_sm,
-                                   'Clinical_Precedence_sm':d.Clinical_Precedence_sm, 
-                                   'Discovery_Precedence_sm':d.Discovery_Precedence_sm, 
-                                   'Predicted_Tractable_sm':d.Predicted_Tractable_sm, 'Category_sm':d.Category_sm},
-            'Bucket_evidences': {'Bucket_1-3_sm': {'drug_chembl_ids_sm':d.drug_chembl_ids_sm, 'drug_names_sm':d.drug_names_sm}, 
-                                 'Bucket_4_sm': {'PDB_Known_Ligand':d.PDB_Known_Ligand}, 
-                                 'Bucket_5-6_sm': {'DrugEBIlity_score':d.DrugEBIlity_score}, 
-                                 'Bucket_7_sm': {'High_Quality_ChEMBL_compounds':d.High_Quality_ChEMBL_compounds}, 
-                                 'Bucket_8_sm': {'Small_Molecule_Druggable_Genome_Member':d.Small_Molecule_Druggable_Genome_Member}}
+            'Bucket_evaluation': {'Bucket_sum_sm':d.Bucket_sum_sm, 'Top_bucket_sm':d.Top_bucket_sm},
+            'Category_scores': {'Clinical_Precedence_sm':d.Clinical_Precedence_sm, 
+                                'Discovery_Precedence_sm':d.Discovery_Precedence_sm, 
+                                'Predicted_Tractable_sm':d.Predicted_Tractable_sm}, 
+            'Category_evaluation': {'Top_Category_sm':d.Category_sm},
+#            'Bucket_assessment_data': {'Bucket_1_2_3_sm': {'drug_chembl_ids_sm':d.drug_chembl_ids_sm, 'drug_names_sm':d.drug_names_sm}, 
+            'Bucket_assessment_data': {'Bucket_1_2_3_sm': {'drugs_in_clinic':d.drug_names_dict_sm, 'max_clinical_phase':d.clinical_phases_sm}, 
+                                     'Bucket_4_sm': {'PDB_known_ligands':d.PDB_Known_Ligand}, 
+                                     'Bucket_5-6_sm': {'DrugEBIlity_score':d.DrugEBIlity_score}, 
+                                     'Bucket_7_sm': {'number_high_quality_ChEMBL_compounds':d.High_Quality_ChEMBL_compounds}, 
+                                     'Bucket_8_sm': {'Small_Molecule_Druggable_Genome_Member':d.Small_Molecule_Druggable_Genome_Member}}
             }
 

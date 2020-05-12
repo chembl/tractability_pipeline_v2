@@ -21,6 +21,7 @@ import os
 import numpy as np
 import pandas as pd
 import pkg_resources
+import ast
 # from sqlalchemy import create_engine
 
 PY3 = sys.version > '3'
@@ -65,7 +66,8 @@ class Protac_buckets(object):
 
         # All chembl data loaded into here
         self.all_chembl_targets = None
-
+        # Human proteome data loaded into here
+        self.human_proteome = None
 
         # If antibody results are to be combined with small molecule results, append antibody columns to sm results
         # Otherwise, use the id_xref dataframe
@@ -414,7 +416,15 @@ class Protac_buckets(object):
         self.out_df['Bucket_2_PROTAC'] = 0
         self.out_df['Bucket_3_PROTAC'] = 0
 
+        # AR PROTAC ARV-110 is currently in clinical trials for metastatic castration-resistant prostate cancer. 
         self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000169083'), 'Bucket_3_PROTAC'] = 1
+        # ER PROTAC ARV-471 is currently in clinical trials for advanced or metastatic ER+/Her2− breast cancer. 
+        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000091831'), 'Bucket_3_PROTAC'] = 1
+
+        # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
+        # self.out_df['drug_chembl_ids_PROTAC'].fillna('', inplace=True)
+        # self.out_df['drug_chembl_ids_PROTAC'] = self.out_df['drug_chembl_ids_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
 
@@ -491,10 +501,12 @@ class Protac_buckets(object):
             df.to_csv("{}/protac_uniprot_ubl_conjugation.csv".format(self.store_fetched))
 
         df['Bucket_5_PROTAC'] = 1
+        df['Uniprot_keyword'] = 'Yes'
 
         self.out_df = self.out_df.merge(df, how='left', on='accession')
         # replace NaN with 0
         self.out_df['Bucket_5_PROTAC'].fillna(0, inplace=True)
+        self.out_df['Uniprot_keyword'].fillna('No', inplace=True)
 
         print(self.out_df.columns)
 
@@ -540,13 +552,23 @@ class Protac_buckets(object):
     ##############################################################################################################
 
     def _search_papers(self):
+        
+#        url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=%22proteolysis%20targeting%20chimera%22&resultType=lite&cursorMark=*&pageSize=1000&format=json")
+        # another search query: (("proteolysis targeting chimera") AND ("PROTAC")) OR (("PROTAC") AND (("degradation") OR ("degrade")))
+        # where "PROTAC" is present in both options to avoid papers mentioning just once "proteolysis targeting chimera" (e.g. as technique or example)
 
-        url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=%22proteolysis%20targeting%20chimera%22&resultType=lite&cursorMark=*&pageSize=1000&format=json")
+        # keyword search only in Abstract (keywords in "" need additional 'ABSTRACT:'): 
+        # ABSTRACT:((ABSTRACT:"proteolysis targeting chimera" OR ABSTRACT:"proteolysis targeting chimeric") OR (PROTAC AND (degradation OR degrade OR ubiquitin OR proteolysis)))
+        url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=ABSTRACT%3A%28%28ABSTRACT%3A%22proteolysis%20targeting%20chimera%22%20OR%20ABSTRACT%3A%22proteolysis%20targeting%20chimeric%22%29%20OR%20%28PROTAC%20AND%20%28degradation%20OR%20degrade%20OR%20ubiquitin%20OR%20proteolysis%29%29%29&resultType=lite&cursorMark=*&pageSize=1000&format=json")
+        
         data = url.read()
         try: data = json.loads(data.decode())
         except UnicodeDecodeError: data = json.loads(data)
         df = pd.read_json(json.dumps(data['resultList']['result']), orient='records')
-
+        
+        # remove entries with missing 'authorString'
+        df = df.loc[~df['authorString'].isna()]
+        
         return df[['authorString', 'id', 'issue',
                    'journalTitle', 'pmcid',
                    'pmid', 'pubType', 'pubYear', 'source', 'title', 'tmAccessionTypeList']]
@@ -587,6 +609,7 @@ class Protac_buckets(object):
         if self.store_fetched: 
             self.annotations.to_csv("{}/protac_pmc_annotations.csv".format(self.store_fetched), encoding='utf-8')
             self.tags.to_csv("{}/protac_pmc_tags.csv".format(self.store_fetched), encoding='utf-8')
+        
 
     @staticmethod
     def _extract_uniprot(row):
@@ -608,6 +631,9 @@ class Protac_buckets(object):
 #        tagged_annotations = self.annotations.merge(grouped_tags, how='left', left_on='exact', right_on='name')
         tagged_annotations = self.annotations.merge(self.tags, how='left', left_index=True, right_index=True)
 
+        # keep only tagged_annotations from Abstract of publications
+        tagged_annotations = tagged_annotations.loc[tagged_annotations['section'].astype(str).str.contains('Abstract')]
+        
         tagged_annotations['EuropePMC_accession'] = tagged_annotations.apply(self._extract_uniprot, axis=1)
         
         tagged_annotations['short_id'] = tagged_annotations.apply(self._extract_id, axis=1)
@@ -641,20 +667,46 @@ class Protac_buckets(object):
         # 1. join with human_proteome on 'symbol' (higher chances of getting the correct/dominant isoform)
         # 2. join with human_proteome on 'gene_name' (occurs several times, for all isoforms)
         # 3. join both new datasets
-        # 4. remove duplicated rows (keep='first' is default)
         tagged_targets_on_symbol = joined.merge(human_proteome, left_on='name', right_on='symbol', how='left')
         tagged_targets_on_gene_name = joined.merge(human_proteome, left_on='name', right_on='gene_name', how='left')
         tagged_targets_df = tagged_targets_on_symbol.merge(tagged_targets_on_gene_name[['name','accession','gene_name']], on='name', how='inner')
-        tagged_targets_df.drop_duplicates(inplace=True)
+        # 4. convert name and protein_name to lowercase for merging 
+        #(to avoid missing through different uppercase usage in text)
+        # 5. join with human_proteome on 'protein_name_lower' (to get full name annotations) = third new dataset 'tagged_targets_on_protein_name'
+        # 6. join tagged_targets_df with third new dataset 'tagged_targets_on_protein_name' using lowercase names
+        joined['name_lower'] = joined['name'].str.lower()
+        human_proteome['protein_name_lower'] = human_proteome['protein_name'].str.lower()
+        tagged_targets_on_protein_name = joined.merge(human_proteome, left_on='name_lower', right_on='protein_name_lower', how='left')
+        tagged_targets_df = tagged_targets_df.merge(tagged_targets_on_protein_name[['name','accession','protein_name']], on='name', how='left')
+
+        # 7. remove duplicated rows (keep='first' is default), as lists are contained in df:
+        # convert the df to str type astype(str), drop duplicates and then select the rows from original df, thus output df still contains lists
+        tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]
+        
+        # rename last joined accession column to "accession_z"
+        tagged_targets_df.rename(columns={"accession": "accession_z"}, inplace=True)
+        
+        # add additional mapping 'accession_z2' column based on protein name from publication matching end of UniProts full protein name
+        tagged_targets_df['accession_z2'] = ''
+        tagged_targets_df['accession_z2'] = tagged_targets_df['name'].str.lower().apply(lambda x: human_proteome[human_proteome['protein_name_lower'].str.endswith(x)]['accession'].any(0))
+        tagged_targets_df['accession_z2'].replace(to_replace=False, value=np.nan, inplace=True)
+        
+        
         # as new 'accession' column take 'accession_x' (from tagged_targets_on_symbol)
         # if 'accession_x' (from tagged_targets_on_symbol) is NA, take 'accession_y' (from tagged_targets_on_gene_name)
         tagged_targets_df['accession'] = tagged_targets_df['accession_x'].fillna(value=tagged_targets_df['accession_y'])
+        # if 'accession' is still NA, take 'accession_z' (from tagged_targets_on_protein_name)
+        tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['accession_z'])
+        # if 'accession' is still NA, take 'accession_z2' (from 'protein_name_lower'.str.endswith('exact_lower') = substring search at end of full UniProt protein_name_lower)
+        tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['accession_z2'])
         # if 'accession' is still NA, take 'EuropePMC_accession'
         tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['EuropePMC_accession'])
 
         if self.store_fetched: 
             tagged_targets_df.to_csv("{}/protac_pmc_tagged_targets.csv".format(self.store_fetched), encoding='utf-8')
 
+        self.human_proteome = human_proteome[['accession','symbol','gene_name','protein_name']]
+        
 #        return joined[['accession', 'prefix', 'exact', 'postfix', 'section', 'full_id', 'journalTitle', 'title']]
         return tagged_targets_df[['accession', 'name', 'short_id', 'full_id', 'title']]
 
@@ -691,7 +743,8 @@ class Protac_buckets(object):
         f['title'] = set_title_strings
         
         tagged_targets_df_grouped = tagged_targets_df.groupby(['accession']).agg(f).reset_index(drop=True)
-                
+        
+        # removing duplicates        
         def clean_column(df, col):
             df[col] = df[col].apply(lambda x: list(dict.fromkeys(x.split(","))))
         def clean_title_column(df, col):
@@ -703,10 +756,15 @@ class Protac_buckets(object):
         
 
         self.out_df = self.out_df.merge(tagged_targets_df_grouped, how='left', on='accession')
-
+        
         self.out_df['Bucket_7_PROTAC'] = 0
         self.out_df.loc[(~self.out_df['full_id'].isna()), 'Bucket_7_PROTAC'] = 1
         
+        # count literature per target and append as column
+        self.out_df['literature_count_PROTAC'] = [len(x) for x in ast.literal_eval(",".join(self.out_df['full_id'].fillna("['']",inplace=False).astype(str).replace(to_replace="['']",value="''",inplace=False)))]
+
+        # adding protein_name from human_proteome to self.out_df
+        self.out_df = self.out_df.merge(self.human_proteome[['accession','protein_name']], how='outer', on='accession')        
         # for debugging:
         # self.out_df.to_csv("{}/protac_out_df_checkpoint.csv".format(self.store_fetched), encoding='utf-8')
         print(self.out_df.columns)
@@ -865,13 +923,20 @@ class Protac_buckets(object):
 
         # self.out_df.to_csv("{}/protac_out_df_checkpoint2.csv".format(self.store_fetched), index=False)
 
-        self.out_df['Bucket_8_PROTAC'] = 0
-        # print(self.out_df.compound_chembl_ids_PROTAC)
-        
-        # check if tuple in column 'compound_chembl_ids_PROTAC' is not empty, then set bucket 9 to 1
+        self.out_df['Bucket_8_PROTAC'] = 0        
+        # check if tuple in column 'compound_chembl_ids_PROTAC' is not empty, then set bucket to 1
         self.out_df.loc[(self.out_df['compound_chembl_ids_PROTAC'] != ''), 'Bucket_8_PROTAC'] = 1
 
-        # self.out_df.to_csv("{}/protac_out_df_checkpoint3.csv".format(self.store_fetched), index=False)
+        # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
+        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
+        self.out_df['compound_chembl_ids_PROTAC'].fillna('', inplace=True)
+        self.out_df['compound_chembl_ids_PROTAC'] = self.out_df['compound_chembl_ids_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        # self.out_df['pchembl_values_PROTAC'].fillna('', inplace=True)
+        # self.out_df['pchembl_values_PROTAC'] = self.out_df['pchembl_values_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+    
+        # counting compound_chembl_ids_PROTAC: list containing empty string needs to be replaced by empty list (otherwise counted as 1)
+        self.out_df['count_compound_chembl_ids_PROTAC'] = [len(x) for x in ast.literal_eval(",".join(self.out_df['compound_chembl_ids_PROTAC'].astype(str).replace(to_replace="['']",value="[]",inplace=False)))]        
+
 
         print(self.out_df.columns)
 
@@ -948,6 +1013,7 @@ class Protac_buckets(object):
                                    # 'Uniprot_high_conf_loc', 'GO_high_conf_loc',
                                    # 'Uniprot_med_conf_loc',
                                    # 'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location',
+                                   'protein_name', 
                                    'Bucket_1_PROTAC', 'Bucket_2_PROTAC', 'Bucket_3_PROTAC', 
                                    'Bucket_4_PROTAC', 'Bucket_5_PROTAC', 'Bucket_6_PROTAC', 
                                    'Bucket_7_PROTAC', 'Bucket_8_PROTAC', #'Bucket_9_PROTAC', 
@@ -955,15 +1021,22 @@ class Protac_buckets(object):
                                    # 'drug_chembl_ids_PROTAC', 'drug_names_PROTAC',
                                    'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean',
                                    'Max_halflife', 'Min_halflife',
-                                   'Uniprot_PTM', 'Uniprot_CrossLink', 
+                                   'Uniprot_keyword', 'Uniprot_PTM', 'Uniprot_CrossLink', 
                                    'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013', 'number_of_ubiquitination_sites', 
-                                   'full_id', 'title', 'compound_chembl_ids_PROTAC', #'pchembl_values_PROTAC', 
+                                   'literature_count_PROTAC', 'full_id', 'title', 
+                                   'count_compound_chembl_ids_PROTAC', #'compound_chembl_ids_PROTAC', #'pchembl_values_PROTAC', 
                                    'PROTAC_location_Bucket'
                                    ]]
 
 
         # Score each category, and label highest category
         self.out_df['Clinical_Precedence_PROTAC'] = self.out_df.apply(self._clinical_precedence, axis=1)
+        self.out_df['Literature_Precedence_PROTAC'] = 0
+        self.out_df.loc[(self.out_df['Bucket_7_PROTAC'] == 1), 'Literature_Precedence_PROTAC'] = 1
+        self.out_df['Discovery_Opportunity_PROTAC'] = 0
+        self.out_df.loc[(self.out_df['Bucket_4_PROTAC'] == 1) & ((self.out_df['Bucket_5_PROTAC'] == 1) | (self.out_df['Bucket_6_PROTAC'] == 1)) &
+                        (self.out_df['Bucket_8_PROTAC'] == 1) & (self.out_df['PROTAC_location_Bucket'] <= 2),
+                        'Discovery_Opportunity_PROTAC'] = 1
 
         self.out_df['Category_PROTAC'] = 'Unknown'
         self.out_df.loc[(self.out_df['Bucket_4_PROTAC'] == 1) & ((self.out_df['Bucket_5_PROTAC'] == 1) | (self.out_df['Bucket_6_PROTAC'] == 1)) &
@@ -973,14 +1046,6 @@ class Protac_buckets(object):
         self.out_df.loc[(self.out_df['Top_bucket_PROTAC'] <= 3), 'Category_PROTAC'] = 'Clinical_Precedence_PROTAC'
         
 
-        # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
-        # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
-        # self.out_df['drug_chembl_ids_PROTAC'].fillna('', inplace=True)
-        # self.out_df['drug_chembl_ids_PROTAC'] = self.out_df['drug_chembl_ids_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        self.out_df['compound_chembl_ids_PROTAC'].fillna('', inplace=True)
-        self.out_df['compound_chembl_ids_PROTAC'] = self.out_df['compound_chembl_ids_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        # self.out_df['pchembl_values_PROTAC'].fillna('', inplace=True)
-        # self.out_df['pchembl_values_PROTAC'] = self.out_df['pchembl_values_PROTAC'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
 
@@ -993,15 +1058,15 @@ class Protac_buckets(object):
         return {
             'Bucket_scores': {'Bucket_1_PROTAC':d.Bucket_1_PROTAC, 'Bucket_2_PROTAC':d.Bucket_2_PROTAC, 'Bucket_3_PROTAC':d.Bucket_3_PROTAC, 
                               'Bucket_4_PROTAC':d.Bucket_4_PROTAC, 'Bucket_5_PROTAC':d.Bucket_5_PROTAC, 'Bucket_6_PROTAC':d.Bucket_6_PROTAC, 
-                              'Bucket_7_PROTAC':d.Bucket_7_PROTAC, 'Bucket_8_PROTAC':d.Bucket_8_PROTAC}, #, 'Bucket_9_PROTAC':d.Bucket_9_PROTAC
-            'Bucket_evaluation': {'Bucket_sum_PROTAC':d.Bucket_sum_PROTAC, 'Top_bucket_PROTAC':d.Top_bucket_PROTAC,
-                                  'Clinical_Precedence_PROTAC':d.Clinical_Precedence_PROTAC, 'Category_PROTAC':d.Category_PROTAC},
-            'Bucket_evidences': {'Bucket_1-3_PROTAC': {'drug_chembl_ids_PROTAC':{}, 'drug_names_PROTAC':{}}, #{'drug_chembl_ids_PROTAC':d.drug_chembl_ids_PROTAC}, 
+                              'Bucket_7_PROTAC':d.Bucket_7_PROTAC, 'Bucket_8_PROTAC':d.Bucket_8_PROTAC, 'PROTAC_Location_Bucket':d.PROTAC_location_Bucket}, #, 'Bucket_9_PROTAC':d.Bucket_9_PROTAC
+            'Bucket_evaluation': {'Bucket_sum_PROTAC':d.Bucket_sum_PROTAC, 'Top_bucket_PROTAC':d.Top_bucket_PROTAC},
+            'Category_scores': {'Clinical_Precedence_PROTAC':d.Clinical_Precedence_PROTAC, 'Literature_Precedence_PROTAC':d.Literature_Precedence_PROTAC, 'Discovery_Opportunity_PROTAC':d.Discovery_Opportunity_PROTAC}, 
+            'Category_evaluation': {'Top_Category_PROTAC':d.Category_PROTAC},
+            'Bucket_evidences': {'Bucket_1_2_3_PROTAC': {'drugs_in_clinic':{}, 'max_clinical_phase':{}}, #{'drug_chembl_ids_PROTAC':d.drug_chembl_ids_PROTAC}, 
                                  'Bucket_4_PROTAC': {'Max_halflife':d.Max_halflife, 'Min_halflife':d.Min_halflife}, 
-                                 'Bucket_5_PROTAC': {'Uniprot_PTM':d.Uniprot_PTM, 'Uniprot_CrossLink':d.Uniprot_CrossLink}, 
-                                 'Bucket_6_PROTAC': {'number_of_ubiquitination_sites':d.number_of_ubiquitination_sites}, 
-                                 'Bucket_7_PROTAC': {'full_id':d.full_id, 'title':d.title}, 
-                                 'Bucket_8_PROTAC': {'compound_chembl_ids_PROTAC':d.compound_chembl_ids_PROTAC}}
+                                 'Bucket_5_PROTAC': {'Uniprot_keyword':d.Uniprot_keyword, 'Uniprot_PTM':d.Uniprot_PTM, 'Uniprot_CrossLink':d.Uniprot_CrossLink}, 
+                                 'Bucket_6_PROTAC': {'Ub_PhosphoSitePlus':d.Ub_PhosphoSitePlus, 'Ub_mUbiSiDa_2013':d.Ub_mUbiSiDa_2013, 'number_of_ubiquitination_sites':d.number_of_ubiquitination_sites}, 
+                                 'Bucket_7_PROTAC': {'literature_count_PROTAC':d.literature_count_PROTAC, 'literature_link':d.full_id, 'title':d.title}, 
+#                                 'Bucket_8_PROTAC': {'compound_chembl_ids_PROTAC':d.compound_chembl_ids_PROTAC}}
+                                 'Bucket_8_PROTAC': {'number_chembl_compounds_PROTAC':d.count_compound_chembl_ids_PROTAC}}
             }
-
-            

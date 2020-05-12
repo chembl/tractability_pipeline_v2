@@ -18,7 +18,7 @@ import zipfile
 import os
 
 # import mygene
-# import numpy as np
+import numpy as np
 import pandas as pd
 import pkg_resources
 # from sqlalchemy import create_engine
@@ -45,6 +45,22 @@ class Antibody_buckets(object):
     #
     #
     ##############################################################################################################
+    # Define UniProt Subcellular location terms
+    accepted_uniprot_locs = ["Cell membrane", "Plasma membrane", "Cytoplasmic membrane", "Plasmalemma", 
+                           "Apical cell membrane", "Apical plasma membrane", 
+                           "Apicolateral cell membrane", "Apicolateral plasma membrane", 
+                           "Attachment organelle membrane", "Basal cell membrane", 
+                           "Basolateral cell membrane", "Basolateral plasma membrane", 
+                           "Lateral cell membrane", "Lateral plasma membrane", 
+                           "Peripheral membrane protein", 
+                           "Bud membrane", "Basement membrane", "Caveola", "Cilium membrane", "Ciliary membrane", 
+                           "Synaptic cell membrane", "Presynaptic cell membrane", "Postsynaptic cell membrane", 
+                           "Endosome membrane", "Pseudopodium membrane", 
+                           "Filopodium membrane", "Flagellum membrane", "Cilium membrane", 
+                           "Cell surface", "Secreted", 
+                           "Extracellular matrix", "Extracellular side", "Extracellular space",
+                           "Extracellular region", "Extracellular vesicle membrane"]
+
     # Load accepted GO locations
     accepted_go_locs = {}
     with open(os.path.join(DATA_PATH, 'go_accepted_loc.tsv')) as go_loc_file:
@@ -169,6 +185,13 @@ class Antibody_buckets(object):
         self.all_chembl_targets = self.all_chembl_targets[
             self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
 
+        # pre-processing groupby on two columns to get highest max_phase by drug (and target)
+        f0 = {x: 'first' for x in self.all_chembl_targets.columns if x not in ['accession','drug_chembl_id']}
+        f0['max_phase_for_ind'] = 'max'
+        f0['max_phase'] = 'max'
+
+        self.all_chembl_targets = self.all_chembl_targets.groupby(['accession','drug_chembl_id'], as_index=False).agg(f0)
+
         def set_as_tuple(x):
             return tuple(x)
 
@@ -176,12 +199,16 @@ class Antibody_buckets(object):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
             return ",".join([y for y in x if isinstance(y,str) and y])
 
+        # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
+        self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase_for_ind'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
+
         # f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f['max_phase_for_ind'] = 'max'
         f['max_phase'] = 'max'
         f['drug_chembl_id'] = set_strings
         f['drug_name'] = set_strings
+        f['clinical_phase'] = set_strings
 
         self.all_chembl_targets = self.all_chembl_targets.groupby('accession', as_index=False).agg(f)
         # self.all_chembl_targets = self.all_chembl_targets.groupby(['accession']).agg(f).reset_index(drop=True)
@@ -189,7 +216,7 @@ class Antibody_buckets(object):
         # self.all_chembl_targets.to_csv("{}/ab_all_chembl_targets_checkpoint1.csv".format(self.store_fetched), index=False)
         # self.out_df.to_csv("{}/ab_out_df_checkpoint1.csv".format(self.store_fetched), index=False)
 
-        self.out_df = self.all_chembl_targets.merge(self.out_df, how='outer', on='accession', suffixes=('_sm', '_ab'))
+        self.out_df = self.all_chembl_targets.merge(self.out_df, how='outer', on='accession', suffixes=('', '_ab'))
 
         self.out_df.drop(['component_id', 'ref_id', 'ref_type', 'tid',
                           'ref_url'], axis=1, inplace=True)
@@ -204,7 +231,8 @@ class Antibody_buckets(object):
         self.out_df = self.out_df.groupby(['ensembl_gene_id'], as_index=False).agg(f2)
 
         self.out_df.rename(columns = {'drug_chembl_id':'drug_chembl_ids_ab',
-                                      'drug_name':'drug_names_ab'}, inplace = True)
+                                      'drug_name':'drug_names_ab',
+                                      'clinical_phase':'clinical_phases_ab'}, inplace = True)
 
         # self.out_df.to_csv("{}/ab_out_df_checkpoint3.csv".format(self.store_fetched), index=False)
         
@@ -317,8 +345,11 @@ class Antibody_buckets(object):
 
     def _set_b4_flag(self, s):
 
+#        accepted_uniprot_high_conf = [a[1] for a in s['Subcellular location [CC]'] if
+#                                      ('Cell membrane' in a[1] or 'Secreted' in a[1]) and (self._check_evidence(a[0]))]
         accepted_uniprot_high_conf = [a[1] for a in s['Subcellular location [CC]'] if
-                                      ('Cell membrane' in a[1] or 'Secreted' in a[1]) and (self._check_evidence(a[0]))]
+                                      any(accepted_loc in a[1] for accepted_loc in Antibody_buckets.accepted_uniprot_locs) and 
+                                      (self._check_evidence(a[0]))]
 
         all_uniprot_high_conf = [(a[1], a[0]) for a in s['Subcellular location [CC]'] if self._check_evidence(a[0])]
 
@@ -331,8 +362,11 @@ class Antibody_buckets(object):
 
     def _set_b6_flag(self, s):
 
+#        accepted_uniprot_med_conf = [a[1] for a in s['Subcellular location [CC]'] if
+#                                     ('Cell membrane' in a[1] or 'Secreted' in a[1]) and not self._check_evidence(a[0])]
         accepted_uniprot_med_conf = [a[1] for a in s['Subcellular location [CC]'] if
-                                     ('Cell membrane' in a[1] or 'Secreted' in a[1]) and not self._check_evidence(a[0])]
+                                     any(accepted_loc in a[1] for accepted_loc in Antibody_buckets.accepted_uniprot_locs) and not 
+                                     self._check_evidence(a[0])]
 
         all_uniprot_med_conf = [(a[1], a[0]) for a in s['Subcellular location [CC]'] if not self._check_evidence(a[0])]
 
@@ -621,7 +655,7 @@ class Antibody_buckets(object):
                                    'Bucket_4_ab', 'Bucket_5_ab', 'Bucket_6_ab', 
                                    'Bucket_7_ab', 'Bucket_8_ab', 'Bucket_9_ab', 
                                    'Bucket_sum_ab', 'Top_bucket_ab',
-                                   'drug_chembl_ids_ab', 'drug_names_ab',
+                                   'drug_chembl_ids_ab', 'drug_names_ab', 'clinical_phases_ab',
                                    'Uniprot_high_conf_loc', 'GO_high_conf_loc',
                                    'Uniprot_med_conf_loc',
                                    'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location'
@@ -646,11 +680,18 @@ class Antibody_buckets(object):
             'Category_ab'] = 'Predicted_Tractable_ab_Medium_to_low_confidence'
 
 
+        # Cleaning columns
+        self.out_df['drug_chembl_ids_ab'].fillna('', inplace=True)
+        self.out_df['drug_names_ab'].fillna('', inplace=True)
+        self.out_df['clinical_phases_ab'].fillna('', inplace=True)
+
+        # create dictionaries from 'drug_chembl_ids_sm' and 'clinical_phases_sm'/'drug_names_sm'
+        self.out_df['drug_names_dict_ab'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_ab'].split(","), row['drug_names_ab'].split(","))), axis=1)
+        self.out_df['clinical_phases_dict_ab'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_ab'].split(","), row['clinical_phases_ab'].split(","))), axis=1)
+
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
-        self.out_df['drug_chembl_ids_ab'].fillna('', inplace=True)
         self.out_df['drug_chembl_ids_ab'] = self.out_df['drug_chembl_ids_ab'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        self.out_df['drug_names_ab'].fillna('', inplace=True)
         self.out_df['drug_names_ab'] = self.out_df['drug_names_ab'].apply(lambda x: list(dict.fromkeys(x.split(","))))
 
         print(self.out_df.columns)
@@ -665,12 +706,13 @@ class Antibody_buckets(object):
             'Bucket_scores': {'Bucket_1_ab':d.Bucket_1_ab, 'Bucket_2_ab':d.Bucket_2_ab, 'Bucket_3_ab':d.Bucket_3_ab, 
                               'Bucket_4_ab':d.Bucket_4_ab, 'Bucket_5_ab':d.Bucket_5_ab, 'Bucket_6_ab':d.Bucket_6_ab, 
                               'Bucket_7_ab':d.Bucket_7_ab, 'Bucket_8_ab':d.Bucket_8_ab, 'Bucket_9_ab':d.Bucket_9_ab},
-            'Bucket_evaluation': {'Bucket_sum_ab':d.Bucket_sum_ab, 'Top_bucket_ab':d.Top_bucket_ab,
-                                   'Clinical_Precedence_ab':d.Clinical_Precedence_ab, 
-                                   'Predicted_Tractable_ab_High_confidence':d.Predicted_Tractable_ab_High_confidence,
-                                   'Predicted_Tractable_ab_Medium_to_low_confidence':d.Predicted_Tractable_ab_Medium_to_low_confidence, 
-                                   'Category_ab':d.Category_ab},
-            'Bucket_evidences': {'Bucket_1-3_ab': {'drug_chembl_ids_ab':d.drug_chembl_ids_ab, 'drug_names_ab':d.drug_names_ab}, 
+            'Bucket_evaluation': {'Bucket_sum_ab':d.Bucket_sum_ab, 'Top_bucket_ab':d.Top_bucket_ab},
+            'Category_scores': {'Clinical_Precedence_ab':d.Clinical_Precedence_ab, 
+                                'Predicted_Tractable_ab_High_confidence':d.Predicted_Tractable_ab_High_confidence,
+                                'Predicted_Tractable_ab_Medium_to_low_confidence':d.Predicted_Tractable_ab_Medium_to_low_confidence}, 
+            'Category_evaluation': {'Top_Category_ab':d.Category_ab},
+#            'Bucket_evidences': {'Bucket_1_2_3_ab': {'drug_chembl_ids_ab':d.drug_chembl_ids_ab, 'drug_names_ab':d.drug_names_ab}, 
+            'Bucket_evidences': {'Bucket_1_2_3_ab': {'drugs_in_clinic':d.drug_names_dict_ab, 'max_clinical_phase':d.clinical_phases_ab}, 
                                  'Bucket_4-8_ab': {'Uniprot_high_conf_loc':d.Uniprot_high_conf_loc, 'GO_high_conf_loc':d.GO_high_conf_loc, 
                                                    'Uniprot_med_conf_loc':d.Uniprot_med_conf_loc, 'GO_med_conf_loc':d.GO_med_conf_loc, 
                                                    'Transmembrane':d.Transmembrane, 'Signal_peptide':d.Signal_peptide}, 
