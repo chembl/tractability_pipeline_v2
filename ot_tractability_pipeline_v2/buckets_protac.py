@@ -564,7 +564,8 @@ class Protac_buckets(object):
         data = url.read()
         try: data = json.loads(data.decode())
         except UnicodeDecodeError: data = json.loads(data)
-        df = pd.read_json(json.dumps(data['resultList']['result']), orient='records')
+        #df = pd.read_json(json.dumps(data['resultList']['result']), orient='records')
+        df = pd.json_normalize(data['resultList']['result'])
     
         # remove entries with missing 'authorString'
         df = df.loc[~df['authorString'].isna()]
