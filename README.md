@@ -18,6 +18,7 @@ The pipeline has two main outputs:
 1) a **TSV** file (table) with one target per row and bucket data as columns, 
 2) a **JSON** data structure (generated from the table output) with a hierarchical/nested data structure, relating the evidence to the buckets:  
     {"ensembl_gene_id":{...}, {$modality: {'Bucket_scores':{...}, 'Bucket_evaluation':{...}, 'Category_scores':{...}, 'Category_evaluation':{...}, 'Bucket_evidences':{...}}}}  
+
 Additionaly the data fetched during execution is saved into a 'fetched data' folder (default).
 
 
@@ -57,7 +58,7 @@ Bucket 3 (ChEMBL) Targets with SM in pre-clinical phase 1
 Bucket 4 (PDB) Targets with crystal structures with ligands (excluding: buffer compounds, solvents, crystallization agents/additives and sugars)  
 Bucket 5 (DrugEBIlity) Targets with score ≥0.7  
 Bucket 6 (DrugEBIlity) Targets with 0 < score < 0.7  
-Bucket 7 (ChEMBL) Targets with ligands (PFI ≤7, SMART hits ≤2, scaffolds ≥2)  
+Bucket 7 (ChEMBL) Targets with ligands (PFI ≤7, SMART hits ≤2)  
 Bucket 8 (Finan et al. 2017) Targets considered druggable using Finan et al's Druggable Genome  
 Not implemented: Bucket 9 (SureChEMBL) Targets with ‘chemical’ patents in the last 5 years
 
@@ -90,7 +91,7 @@ The PROTAC_location_Bucket score is defined by:
 1 = High confidence good location  
 2 = Med confidence good location  
 3 = High confidence grey location  
-4 = Med condifence grey location  
+4 = Med condfidence grey location  
 5 = Unknown location  
 6 = Med confidence bad location  
 7 = High confidence bad location  

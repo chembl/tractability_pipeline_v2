@@ -49,15 +49,14 @@ class Antibody_buckets(object):
     accepted_uniprot_locs = ["Cell membrane", "Plasma membrane", "Cytoplasmic membrane", "Plasmalemma", 
                            "Apical cell membrane", "Apical plasma membrane", 
                            "Apicolateral cell membrane", "Apicolateral plasma membrane", 
-                           "Attachment organelle membrane", "Basal cell membrane", 
+                           "Basal cell membrane", "Basal plasma membrane", 
                            "Basolateral cell membrane", "Basolateral plasma membrane", 
                            "Lateral cell membrane", "Lateral plasma membrane", 
                            "Peripheral membrane protein", 
-                           "Bud membrane", "Basement membrane", "Caveola", "Cilium membrane", "Ciliary membrane", 
                            "Synaptic cell membrane", "Presynaptic cell membrane", "Postsynaptic cell membrane", 
-                           "Endosome membrane", "Pseudopodium membrane", 
-                           "Filopodium membrane", "Flagellum membrane", "Cilium membrane", 
-                           "Cell surface", "Secreted", 
+                           "Endosome membrane", "Pseudopodium membrane", "Bud membrane", "Caveola", 
+                           "Filopodium membrane", "Flagellum membrane", "Cilium membrane", "Ciliary membrane", 
+                           "Cell surface", "Secreted", "Basement membrane", 
                            "Extracellular matrix", "Extracellular side", "Extracellular space",
                            "Extracellular region", "Extracellular vesicle membrane"]
 
@@ -181,9 +180,9 @@ class Antibody_buckets(object):
         if self.store_fetched: 
             self.all_chembl_targets.to_csv("{}/ab_all_chembl_targets.csv".format(self.store_fetched))
 
-        # Make sure max phase is for correct indication
-        self.all_chembl_targets = self.all_chembl_targets[
-            self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
+#        # Make sure max phase is for correct indication
+#        self.all_chembl_targets = self.all_chembl_targets[
+#            self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
 
         # pre-processing groupby on two columns to get highest max_phase by drug (and target)
         f0 = {x: 'first' for x in self.all_chembl_targets.columns if x not in ['accession','drug_chembl_id']}
@@ -200,7 +199,7 @@ class Antibody_buckets(object):
             return ",".join([y for y in x if isinstance(y,str) and y])
 
         # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
-        self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase_for_ind'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
+        self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
 
         # f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
@@ -225,6 +224,7 @@ class Antibody_buckets(object):
 
         f2 = {x: 'first' for x in self.out_df.columns if x != 'ensembl_gene_id'}
         f2['max_phase_for_ind'] = 'max'
+        f2['max_phase'] = 'max'
         # f2['drug_chembl_id'] = set_strings
         # f2['drug_name'] = set_strings
 
@@ -240,11 +240,11 @@ class Antibody_buckets(object):
         self.out_df['Bucket_2_ab'] = 0
         self.out_df['Bucket_3_ab'] = 0
 
-        self.out_df.loc[(self.out_df['max_phase_for_ind'] == 4), 'Bucket_1_ab'] = 1
+        self.out_df.loc[(self.out_df['max_phase'] == 4), 'Bucket_1_ab'] = 1
         self.out_df.loc[
-            (self.out_df['max_phase_for_ind'] < 4) & (self.out_df['max_phase_for_ind'] >= 2), 'Bucket_2_ab'] = 1
+            (self.out_df['max_phase'] < 4) & (self.out_df['max_phase'] >= 2), 'Bucket_2_ab'] = 1
         self.out_df.loc[
-            (self.out_df['max_phase_for_ind'] < 2) & (self.out_df['max_phase_for_ind'] > 0), 'Bucket_3_ab'] = 1
+            (self.out_df['max_phase'] < 2) & (self.out_df['max_phase'] > 0), 'Bucket_3_ab'] = 1
 
         print(self.out_df.columns)
 
@@ -274,7 +274,6 @@ class Antibody_buckets(object):
     @staticmethod
     def make_request(url, data):
         request = urllib2.Request(url)
-
         try:
             url_file = urllib2.urlopen(request, data)
         except urllib2.HTTPError as e:
@@ -282,9 +281,7 @@ class Antibody_buckets(object):
                 print("[NOTFOUND %d] %s" % (e.code, url))
             else:
                 print("[ERROR %d] %s" % (e.code, url))
-
             return None
-
         return url_file.read().decode()
 
     @staticmethod
@@ -336,7 +333,10 @@ class Antibody_buckets(object):
 
     @staticmethod
     def _check_evidence(evidence_li):
-
+        '''
+        High confidence evidences are 'ECO:0000269' and 'ECO:0000305'. 
+        For more info see https://www.uniprot.org/help/evidences
+        '''
         high_conf_evidence = [e for e in evidence_li if ('ECO:0000269' in e or 'ECO:0000305' in e)]
 
         if len(high_conf_evidence) > 0:
@@ -552,17 +552,23 @@ class Antibody_buckets(object):
     ##############################################################################################################
 
     def _main_location(self, s):
-
-        if s['Reliability'] == 'Validated':
-            return s['Validated']
+        '''
+        Get preferentially location with "Approved" reliability over one with "Supported" reliability.
+        ("Approved" is used instead of "Validated", "Enhanced" is added)
+        More on Reliability scores can be found here: https://www.proteinatlas.org/about/assays+annotation#if_reliability_score
+        '''
+        if s['Reliability'] == 'Approved':
+            return s['Approved']
+        elif s['Reliability'] == 'Enhanced':
+            return s['Enhanced']
         else:
             return s['Supported']
 
     def _assign_bucket_9(self):
         '''
-        HPA
+        Human Protein Atlas (HPA)
         '''
-
+        
         print("\t- Assessing Human Protein Atlas main location bucket 9...")
 
         # Download latest file
@@ -577,9 +583,10 @@ class Antibody_buckets(object):
             df.to_csv("{}/ab_proteinatlas_for_bucket_9.csv".format(self.store_fetched))
 
         df['main_location'] = df.apply(self._main_location, axis=1)
-        reliable = df[(df['Reliability'] == 'Supported') | (df['Reliability'] == 'Validated')]
+        reliable = df[(df['Reliability'] == 'Approved') | (df['Reliability'] == 'Enhanced') | (df['Reliability'] == 'Supported')]
 
-        reliable.drop(columns=["Approved", "Supported", "Uncertain",
+        reliable.drop(columns=["Enhanced", "Supported", "Approved", "Uncertain",
+                               "Single-cell variation intensity", "Single-cell variation spatial", 
                                "Cell cycle dependency", "GO id"], axis=1, inplace=True)
 
         self.out_df = self.out_df.merge(reliable, on='ensembl_gene_id', how='left')

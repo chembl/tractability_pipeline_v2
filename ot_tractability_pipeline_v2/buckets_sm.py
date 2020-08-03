@@ -128,13 +128,13 @@ class Small_molecule_buckets(object):
         '''
 
         # print("\t- Querying ChEMBL...")
-        small_mol_info = pd.read_sql_query(chembl_clinical_small_mol, self.engine)
-        if self.store_fetched: 
-            small_mol_info.to_csv("{}/sm_all_chembl_clinical_small_mol_check1.csv".format(self.store_fetched))
         self.all_chembl_targets = pd.read_sql_query(chembl_clinical_targets, self.engine)
         if self.store_fetched: 
-            self.all_chembl_targets.to_csv("{}/sm_all_chembl_clinical_targets_check2.csv".format(self.store_fetched))
-        self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')
+            self.all_chembl_targets.to_csv("{}/sm_all_chembl_clinical_targets.csv".format(self.store_fetched))
+        small_mol_info = pd.read_sql_query(chembl_clinical_small_mol, self.engine)
+        if self.store_fetched: 
+            small_mol_info.to_csv("{}/sm_all_chembl_clinical_small_mol.csv".format(self.store_fetched))
+        self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, how='left', on='parent_molregno')
 
         if self.store_fetched: 
             self.all_chembl_targets.to_csv("{}/sm_all_chembl_targets.csv".format(self.store_fetched))
@@ -230,9 +230,9 @@ class Small_molecule_buckets(object):
         self.clinical_evidence.drop(['component_id', 'ref_id', 'ref_type', 'tid', 'molregno',
                           'parent_molregno', 'ref_url'], axis=1, inplace=True)
 
-        # Make sure max phase is for correct indication
-        self.clinical_evidence = self.clinical_evidence[
-            self.clinical_evidence['max_phase'] == self.clinical_evidence['max_phase_for_ind']]
+#        # Make sure max phase is for correct indication
+#        self.clinical_evidence = self.clinical_evidence[
+#            self.clinical_evidence['max_phase'] == self.clinical_evidence['max_phase_for_ind']]
 
         # pre-processing groupby on two columns to get highest max_phase by drug (and target)
         f0 = {x: 'first' for x in self.clinical_evidence.columns if x not in ['ensembl_gene_id','drug_chembl_id']}
@@ -380,7 +380,8 @@ class Small_molecule_buckets(object):
 
             results = json.loads(self.post_request_pdb(ligand_url, data, False))
             all_results.update(results)
-            # PDBs without ligands are not returned
+            
+            # PDBs without ligands
             chunk_no_ligand = [p for p in chunk if p not in results.keys()]
 
             # Separate PDBs that do or don't contain suitable ligands
@@ -388,7 +389,6 @@ class Small_molecule_buckets(object):
             chunk_bad_ligand = [p for p in results.keys() if not self._has_ligands(results[p])]
 
             # Add chunk info
-
             self.no_ligands += chunk_no_ligand
             self.good_ligands += chunk_good_ligand
             self.bad_ligands += chunk_bad_ligand
@@ -406,6 +406,13 @@ class Small_molecule_buckets(object):
         else:
             return np.nan
 
+    def _other_pdb(self, s):
+
+        if s in self.acc_known_lig:
+            return list(set([p for p in self.acc_map[s] if p in self.no_ligands or p in self.bad_ligands]))
+        else:
+            return np.nan
+
     def _assess_pdb(self):
         '''
         Does the target have a ligand-bound protein crystal structure?
@@ -420,6 +427,7 @@ class Small_molecule_buckets(object):
         self.acc_known_lig = list({c for pdb in self.good_ligands for c in self.pdb_map[pdb]})
 
         self.out_df['PDB_Known_Ligand'] = self.out_df['accession'].apply(self._known_pdb_ligand)
+        self.out_df['PDB_other'] = self.out_df['accession'].apply(self._other_pdb)
 
         self.out_df['Bucket_4_sm'] = 0
 
@@ -564,10 +572,15 @@ class Small_molecule_buckets(object):
         print("\t- Assessing druggable genome bucket 8...")
 
         df = pd.read_csv(os.path.join(DATA_PATH, 'druggable_genome.csv'))
-        df = df[['ensembl_gene_id', 'small_mol_druggable']]
-        df.rename(columns={'small_mol_druggable': 'Small_Molecule_Druggable_Genome_Member'}, inplace=True)
+        #df = df[['ensembl_gene_id', 'small_mol_druggable']]
+        #df.rename(columns={'small_mol_druggable': 'Small_Molecule_Druggable_Genome_Member'}, inplace=True)
 
-        self.out_df = df.merge(self.out_df, how='right', on='ensembl_gene_id')
+        self.out_df = self.out_df.merge(df[['ensembl_gene_id', 'small_mol_druggable']], how='left', on='ensembl_gene_id')
+        # some ensembl_gene_id from Finan et al. are not valid any more > need to merge additionally on 'hgnc_names'/'symbol'
+        self.out_df = self.out_df.merge(df[['hgnc_names', 'small_mol_druggable']], how='left', left_on='symbol', right_on='hgnc_names')
+        
+        self.out_df['Small_Molecule_Druggable_Genome_Member'] = self.out_df['small_mol_druggable_x'].fillna(value=self.out_df['small_mol_druggable_y'])
+        
         self.out_df['Bucket_8_sm'] = 0
         self.out_df.loc[(self.out_df['Small_Molecule_Druggable_Genome_Member'] == 'Y'), 'Bucket_8_sm'] = 1
         self.out_df['Small_Molecule_Druggable_Genome_Member'].fillna('N', inplace=True)
@@ -649,7 +662,8 @@ class Small_molecule_buckets(object):
                                    'Bucket_7_sm', 'Bucket_8_sm', 
                                    'Bucket_sum_sm', 'Top_bucket_sm',
                                    'drug_chembl_ids_sm', 'drug_names_sm', 'clinical_phases_sm',
-                                   'DrugEBIlity_score', 'High_Quality_ChEMBL_compounds', 'Small_Molecule_Druggable_Genome_Member', 'PDB_Known_Ligand', 
+                                   'DrugEBIlity_score', 'High_Quality_ChEMBL_compounds', 'Small_Molecule_Druggable_Genome_Member', 
+                                   'PDB_Known_Ligand', 'PDB_other'
                                    ]]
 
         # Calculate category scores and assign highest category to each target

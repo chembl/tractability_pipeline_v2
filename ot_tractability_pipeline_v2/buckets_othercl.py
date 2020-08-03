@@ -148,9 +148,9 @@ class Othercl_buckets(object):
         if self.store_fetched: 
             self.all_chembl_targets.to_csv("{}/othercl_all_chembl_targets.csv".format(self.store_fetched))
 
-        # Make sure max phase is for correct indication
-        self.all_chembl_targets = self.all_chembl_targets[
-            self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
+#        # Make sure max phase is for correct indication
+#        self.all_chembl_targets = self.all_chembl_targets[
+#            self.all_chembl_targets['max_phase'] == self.all_chembl_targets['max_phase_for_ind']]
 
         # pre-processing groupby on two columns to get highest max_phase by drug (and target)
         f0 = {x: 'first' for x in self.all_chembl_targets.columns if x not in ['accession','drug_chembl_id']}
@@ -167,7 +167,7 @@ class Othercl_buckets(object):
             return ",".join([y for y in x if isinstance(y,str) and y])
 
         # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
-        self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase_for_ind'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
+        self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
 
         f = {x: set_as_tuple for x in self.all_chembl_targets if x != 'accession'}
         f['max_phase_for_ind'] = 'max'
@@ -188,6 +188,7 @@ class Othercl_buckets(object):
 
         f = {x: 'first' for x in self.out_df.columns if x != 'ensembl_gene_id'}
         f['max_phase_for_ind'] = 'max'
+        f['max_phase'] = 'max'
         f['drug_chembl_id'] = set_strings
         f['drug_name'] = set_strings
         f['clinical_phase'] = set_strings
@@ -204,11 +205,11 @@ class Othercl_buckets(object):
         self.out_df['Bucket_2_othercl'] = 0
         self.out_df['Bucket_3_othercl'] = 0
 
-        self.out_df.loc[(self.out_df['max_phase_for_ind'] == 4), 'Bucket_1_othercl'] = 1
+        self.out_df.loc[(self.out_df['max_phase'] == 4), 'Bucket_1_othercl'] = 1
         self.out_df.loc[
-            (self.out_df['max_phase_for_ind'] < 4) & (self.out_df['max_phase_for_ind'] >= 2), 'Bucket_2_othercl'] = 1
+            (self.out_df['max_phase'] < 4) & (self.out_df['max_phase'] >= 2), 'Bucket_2_othercl'] = 1
         self.out_df.loc[
-            (self.out_df['max_phase_for_ind'] < 2) & (self.out_df['max_phase_for_ind'] > 0), 'Bucket_3_othercl'] = 1
+            (self.out_df['max_phase'] < 2) & (self.out_df['max_phase'] > 0), 'Bucket_3_othercl'] = 1
 
 
     ##############################################################################################################
