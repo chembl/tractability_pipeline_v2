@@ -298,12 +298,15 @@ class Protac_buckets(object):
             return 1
         elif len(grey_locations) > 0:
             return 3
-        # elif len(bad_loactions) > 0:
+        # elif len(bad_locations) > 0:
         #     return 7
-
-        # If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
-        elif row['PROTAC_location_Bucket'] == 6:
+        
+        # Taking into account medium conf assessment (not overriding score 2 and 4; only 6); If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
+        elif (row['PROTAC_location_Bucket'] == 6) and (len(locations) > 0):
             return 7
+#        # If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
+#        elif len(locations) > 0:
+#            return 7
         else:
             #print('locations',locations, 'accepted', accepted_locations, 'grey', grey_locations)
             return row['PROTAC_location_Bucket']
@@ -351,13 +354,14 @@ class Protac_buckets(object):
             return 2
         elif len(grey_locations) > 0:
             return 4
-        # elif len(bad_loactions) > 0:
+        # elif len(bad_locations) > 0:
         #     return 6
-
-        # If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
-        else:
+        # If medium conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
+        # else:
+        #     return 6
+        elif len(locations) > 0:
             return 6
-
+ 
 
 
 
@@ -630,17 +634,19 @@ class Protac_buckets(object):
         except AttributeError:
             return None
 
-    @staticmethod
-    def _extract_sentences(row):
-        search_terms = ['PROTAC', 'Protac', 'proteolysis', 'Proteolysis', 'degrad', 'Degrad']
-        #search_terms = ['protac', 'proteolysis', 'degrad'] # lower case search terms when abstractText is used as lower()
-        try:
-            sentences = [sentence + '.' for sentence in row['abstractText'].split('. ') for term in search_terms if term in sentence]
-            #sentences = [sentence + '.' for sentence in row['abstractText'].lower().split('. ') for term in search_terms if term in sentence]
-            return list(set(sentences)) # Use the set type to remove duplicates (if order is not important) and reconvert to list
-        except AttributeError:
-            return None
-    
+# =============================================================================
+#     @staticmethod
+#     def _extract_sentences(row):
+#         search_terms = ['PROTAC', 'Protac', 'proteolysis', 'Proteolysis', 'degrad', 'Degrad']
+#         #search_terms = ['protac', 'proteolysis', 'degrad'] # lower case search terms when abstractText is used as lower()
+#         try:
+#             sentences = [sentence + '.' for sentence in row['abstractText'].split('. ') for term in search_terms if term in sentence]
+#             #sentences = [sentence + '.' for sentence in row['abstractText'].lower().split('. ') for term in search_terms if term in sentence]
+#             return list(set(sentences)) # Use the set type to remove duplicates (if order is not important) and reconvert to list
+#         except AttributeError:
+#             return None
+#     
+# =============================================================================
     
     @staticmethod
     def _get_human_proteome():
@@ -736,26 +742,28 @@ class Protac_buckets(object):
         
 #        return joined[['accession', 'prefix', 'exact', 'postfix', 'section', 'full_id', 'journalTitle', 'title']]
         return tagged_targets_df[['accession', 'name', 'exact', 'short_id', 'full_id', 'section', 'title', 
-                                  'abstractText', 'sentences', 'sentence_count']]
+                                  'abstractText', 'NER_PROTAC_label']] #, 'sentences', 'sentence_count'
 
  
-    @staticmethod
-    def _detect_tag_in_sentences(row):
-        '''
-        check if sentences contain tagged protein
-        '''
-        try:
-            prot_term = [prot_term for prot_term in row['exact_terms'].split(',') for sentence in row['sentences'] if prot_term in sentence]
-            #prot_term = [prot_term for prot_term in row['exact_terms'].lower().split(',') for sentence in row['sentences'] if prot_term in sentence]
-            return prot_term
-        except AttributeError:
-            return None
-    
+# =============================================================================
+#     @staticmethod
+#     def _detect_tag_in_sentences(row):
+#         '''
+#         check if sentences contain tagged protein
+#         '''
+#         try:
+#             prot_term = [prot_term for prot_term in row['exact_terms'].split(',') for sentence in row['sentences'] if prot_term in sentence]
+#             #prot_term = [prot_term for prot_term in row['exact_terms'].lower().split(',') for sentence in row['sentences'] if prot_term in sentence]
+#             return prot_term
+#         except AttributeError:
+#             return None
+#     
+# =============================================================================
     
     def _detect_targets_in_literature(self, tagged_targets_df):
         '''
-        Reformat a copy of tagged_targets to provide the exact tagged term and to be mergable by paper link and UniProt accession; 
-        Then identify the protein tags in abstract sentences (provided in self.papers_df).
+        Reformat a copy of tagged_targets to provide the exact tagged term and to be mergable by paper link and UniProt accession. 
+        [Then identify the protein tags in abstract sentences (provided in self.papers_df). - Not used]
         '''
         
         # get paper links and tagged proteins
@@ -774,10 +782,12 @@ class Protac_buckets(object):
         
         # Merge tags with paper data
         tagged_targets_abstract = tagged_targets_links.merge(self.papers_df, how='left', on='full_id') #.drop(columns=['abstractText','sentences','sentence_count'])
-        # Detect protein tags in sentences extracted from Abstract
-        tagged_targets_abstract['tag_in_sentence'] = tagged_targets_abstract.apply(self._detect_tag_in_sentences, axis=1)
-        tagged_targets_abstract['tag_in_sentence_count'] = [len(x) for x in ast.literal_eval(",".join(tagged_targets_abstract['tag_in_sentence'].fillna('',inplace=False).astype(str).replace(to_replace='',value="''",inplace=False)))]
-        
+# =============================================================================
+#         # Detect protein tags in sentences extracted from Abstract
+#         tagged_targets_abstract['tag_in_sentence'] = tagged_targets_abstract.apply(self._detect_tag_in_sentences, axis=1)
+#         tagged_targets_abstract['tag_in_sentence_count'] = [len(x) for x in ast.literal_eval(",".join(tagged_targets_abstract['tag_in_sentence'].fillna('',inplace=False).astype(str).replace(to_replace='',value="''",inplace=False)))]
+#         
+# =============================================================================
         return tagged_targets_abstract
     
 
@@ -812,6 +822,7 @@ class Protac_buckets(object):
         
         protac_targets = pd.read_csv(os.path.join(DATA_PATH, 'PROTAC_targets.csv'))
         self.out_df = self.out_df.merge(protac_targets[['accession','name_used','protac_target']], how='left', on='accession')
+        self.out_df = self.out_df.dropna(subset=['accession'])
         
         self.out_df['Bucket_7_PROTAC'] = 0
         self.out_df.loc[(~self.out_df['protac_target'].isna()), 'Bucket_7_PROTAC'] = 1
@@ -827,14 +838,33 @@ class Protac_buckets(object):
         
         self.papers_df['search_id'] = self.papers_df.apply(self._search_ID, axis=1)
         self.papers_df['full_id'] = self.papers_df.apply(self._full_ID, axis=1)
-        self.papers_df['sentences'] = self.papers_df.apply(self._extract_sentences, axis=1)
-        # count identified sentences per abstract and append as column
-        self.papers_df['sentence_count'] = [len(x) for x in ast.literal_eval(",".join(self.papers_df['sentences'].fillna('',inplace=False).astype(str).replace(to_replace='',value="''",inplace=False)))]
+# =============================================================================
+#         self.papers_df['sentences'] = self.papers_df.apply(self._extract_sentences, axis=1)
+#         # count identified sentences per abstract and append as column
+#         self.papers_df['sentence_count'] = [len(x) for x in ast.literal_eval(",".join(self.papers_df['sentences'].fillna('',inplace=False).astype(str).replace(to_replace='',value="''",inplace=False)))]
+# 
+# =============================================================================
+
+        
+        # Use pretrained SpaCy model for Named Entity Recognition trained for detection of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'.
+
+        import spacy
+        model_dir = os.path.join(DATA_PATH, "SpaCy_NER_PROTAC_model")
+        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE' from", model_dir)
+        nlp2 = spacy.load(model_dir)
+        
+        def predict_abstracts(textcol):
+            docx = nlp2(textcol)
+            pred = [(ent.label_, ent.text) for ent in docx.ents]
+            return pred
+                
+        self.papers_df['NER_PROTAC_label'] = self.papers_df['abstractText'].map(predict_abstracts)
 
 
         if self.store_fetched: 
             self.papers_df.to_csv("{}/protac_pmc_papers.csv".format(self.store_fetched), encoding='utf-8')
-
+        
+        
         self._get_tagged_targets()
 
         tagged_targets_df = self._process_IDs()
@@ -842,10 +872,12 @@ class Protac_buckets(object):
         tagged_targets_df = tagged_targets_df.drop_duplicates(['accession','full_id'], ignore_index=True)
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]
 
-        tagged_targets_abstract = self._detect_targets_in_literature(tagged_targets_df)
-        # add tag_in_sentence_count
-        tagged_targets_df = tagged_targets_df.merge(tagged_targets_abstract[['accession','full_id','tag_in_sentence_count']], how='left', on=['accession','full_id']) #,'abstractText','sentences','sentence_count'
-
+# =============================================================================
+#         tagged_targets_abstract = self._detect_targets_in_literature(tagged_targets_df)
+#         # add tag_in_sentence_count
+#         tagged_targets_df = tagged_targets_df.merge(tagged_targets_abstract[['accession','full_id','tag_in_sentence_count']], how='left', on=['accession','full_id']) #,'abstractText','sentences','sentence_count'
+# 
+# =============================================================================
         #tagged_targets_df.to_csv("{}/protac_pmc_tagged_targets3.csv".format(self.store_fetched), encoding='utf-8')
 
         # remove duplicated rows (keep='first' is default), as lists are contained in df:
@@ -871,10 +903,13 @@ class Protac_buckets(object):
         f['title'] = set_title_strings
         #f['exact_terms'] = set_title_strings
         f['abstractText'] = set_title_strings
-        f['sentences'] = set_from_list
-        f['sentence_count'] = set_list
-        f['tag_in_sentence_count'] = set_list
-
+        f['NER_PROTAC_label'] = set_from_list
+# =============================================================================
+#         f['sentences'] = set_from_list
+#         f['sentence_count'] = set_list
+#         f['tag_in_sentence_count'] = set_list
+# 
+# =============================================================================
         tagged_targets_df_grouped = tagged_targets_df.groupby(['accession']).agg(f).reset_index(drop=True)
         
         # removing duplicates        
@@ -916,8 +951,8 @@ class Protac_buckets(object):
         if self.store_fetched: 
             literature_evidence = self.out_df.loc[self.out_df['mentionned_in_PROTAC_literature'] == 1]
             literature_evidence = literature_evidence[['accession','symbol','protein_name','literature_count_PROTAC','title','full_id',
-                                 'abstractText','sentences','sentence_count','tag_in_sentence_count']].sort_values(
-                    by=['literature_count_PROTAC'],ascending=[0])
+                                 'abstractText', 'NER_PROTAC_label']].sort_values(
+                    by=['literature_count_PROTAC'],ascending=[0]) # ,'sentences','sentence_count','tag_in_sentence_count'
             literature_evidence = literature_evidence.drop_duplicates(['accession'], ignore_index=True)
             literature_evidence.to_csv("{}/protac_literature_evidence.csv".format(self.store_fetched), encoding='utf-8')
 
@@ -938,7 +973,7 @@ class Protac_buckets(object):
     # (before: Small Molecule Tractable)
     #
     ##############################################################################################################
-    # def _assign_bucket_9(self):
+    # def _assign_bucket_8(self):
     #     '''
     #     Small molecule tractable
     #     '''
@@ -1158,7 +1193,12 @@ class Protac_buckets(object):
         # self.out_df.index = self.out_df['ensembl_gene_id']
         self.out_df = self.out_df.groupby('ensembl_gene_id').first()
 
-        # Columns to keep. This includes columns from the small molecule pipeline
+        # drop rows without gene symbol
+        self.out_df = self.out_df.dropna(subset=['symbol'])
+        # drop rows without accession
+        self.out_df = self.out_df.dropna(subset=['accession'])
+
+        # Columns to keep
         self.out_df = self.out_df[['accession', 'symbol',
                                    # 'Bucket_1_sm', 'Bucket_2_sm', 'Bucket_3_sm', 
                                    # 'Bucket_4_sm', 'Bucket_5_sm', 'Bucket_6_sm', 'Bucket_7_sm',

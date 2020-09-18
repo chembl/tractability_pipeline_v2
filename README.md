@@ -33,9 +33,9 @@ Set the following environment variables:
 
 `CHEMBL_DB=oracle://address:to@local.chembl` 
 
-`CHEMBL_VERSION=26`
+`CHEMBL_VERSION=27`
 
-! The current pipeline only works with the most recent ChEMBL version 26 (not older ones) !
+! The current pipeline works with the most recent ChEMBL version 27, and version 26 (but not older ones) !
 
 
 

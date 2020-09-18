@@ -653,6 +653,11 @@ class Small_molecule_buckets(object):
 
         self.out_df.index = self.out_df['ensembl_gene_id']
         
+        # drop rows without gene symbol
+        self.out_df = self.out_df.dropna(subset=['symbol'])
+        # drop rows without accession
+        self.out_df = self.out_df.dropna(subset=['accession'])
+        
         print(self.out_df.columns)
         
         # Add extra buckets to the list below

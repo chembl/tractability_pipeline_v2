@@ -648,9 +648,13 @@ class Antibody_buckets(object):
         # try:
 
         self.out_df.index = self.out_df['ensembl_gene_id']
+        
+        # drop rows without gene symbol
+        self.out_df = self.out_df.dropna(subset=['symbol'])
+        # drop rows without accession
+        self.out_df = self.out_df.dropna(subset=['accession'])
 
-        # Columns to keep. This includes columns from the small molecule pipeline
-
+        # Columns to keep
         self.out_df = self.out_df[['symbol', 'accession',
                                    # 'Bucket_1_sm', 'Bucket_2_sm', 'Bucket_3_sm', 
                                    # 'Bucket_4_sm', 'Bucket_5_sm', 'Bucket_6_sm', 'Bucket_7_sm',

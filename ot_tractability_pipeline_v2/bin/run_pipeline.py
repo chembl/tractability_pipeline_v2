@@ -381,13 +381,18 @@ def main(args=None):
                                 ascending=[False, False, False,
                                            False], inplace=True)
 
+    # drop rows without gene symbol
+    out_buckets = out_buckets.dropna(subset=['symbol'])
+    # drop duplicated accessions
+    out_buckets = out_buckets.drop_duplicates(subset="accession", keep='first')
+    
     # save final output to tsv
     out_buckets.to_csv('tractability_buckets_{}.tsv'.format(d), sep='\t', index=False)
     if store_fetched:
         out_buckets.to_csv('{}/tractability_buckets_{}.tsv'.format(store_fetched,d), sep='\t', index=False)
 
     # drop entries without UniProt 'accession'
-    out_buckets.dropna(subset=['accession'], inplace=True)
+    out_buckets = out_buckets.dropna(subset=['accession']) #, inplace=True
 
     # reduced output omitting targets missing all buckets (in all workflows)
     #out_buckets_filled = out_buckets[(out_buckets['Top_bucket_sm'] < 10) | (out_buckets['Top_bucket_ab'] < 10) | (out_buckets['Top_bucket_PROTAC'] < 10) | (out_buckets['Top_bucket_othercl'] < 10)]
