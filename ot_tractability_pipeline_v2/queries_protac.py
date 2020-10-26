@@ -83,16 +83,20 @@ chembl_small_mol_active_targets = """
         {0}.target_dictionary td,
         {0}.target_components tc,
         {0}.component_sequences cs
+        {0}.compound_properties cp,
     WHERE md.molregno = mh.molregno
     AND md.molregno = act.molregno 
+    AND md.molregno = cp.molregno
     AND act.assay_id = a.assay_id
     AND a.tid = td.tid
     AND td.tid = tc.tid
     AND tc.component_id = cs.component_id
-    AND md.molecule_type = 'Small molecule'
     AND td.tax_id = 9606
     AND td.target_type LIKE '%PROTEIN%'
     AND act.pchembl_value >= 5
+    AND md.molecule_type not in ('Oligonucleotide', 'Oligosaccharide')
+    AND ((md.molecule_type in ('Protein', 'Unclassified', 'Unknown') AND cp.mw_freebase <= 1500) OR (md.molecule_type = 'Small molecule'))
     """.format(CHEMBL_VERSION)
+#    AND md.molecule_type = 'Small molecule'
 
     

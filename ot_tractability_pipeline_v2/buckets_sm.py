@@ -277,6 +277,7 @@ class Small_molecule_buckets(object):
         #print(self.out_df['symbol'])
         print(self.out_df.columns)
 
+
     ##############################################################################################################
     #
     # Functions relating to bucket 4
@@ -435,41 +436,14 @@ class Small_molecule_buckets(object):
 
         print(self.out_df.columns)
 
-    ##############################################################################################################
-    #
-    # Functions relating to buckets 5-6
-    # DrugEBIlity
-    #
-    ##############################################################################################################
-
-    def _assess_pockets(self):
-        '''
-        Does the target have a DrugEBIlity ensemble score >=0.7 (bucket 5) or  0<score<0.7 (bucket 6)
-        '''
-
-        print("\t- Assessing DrugEBIlity buckets 5 and 6...")
-
-        df = pd.read_csv(os.path.join(DATA_PATH, 'drugebility_scores.csv'))
-
-        df = df.merge(self.gene_xref, on='accession', how='right')
-        #print(df.dtypes)
-        df = df.groupby('ensembl_gene_id', as_index=False).max(numeric_only=True)
-        df['ensemble'].fillna(-1, inplace=True)
-        df.rename(columns={'ensemble': 'DrugEBIlity_score'}, inplace=True)
-
-        self.out_df = df.merge(self.out_df, how='right', on='ensembl_gene_id', suffixes=['_drop', ''])
-        self.out_df['Bucket_5_sm'] = 0
-        self.out_df['Bucket_6_sm'] = 0
-
-        self.out_df.loc[(self.out_df['DrugEBIlity_score'] >= 0.7), 'Bucket_5_sm'] = 1
-        self.out_df.loc[(self.out_df['DrugEBIlity_score'] > 0) & (self.out_df['DrugEBIlity_score'] < 0.7), 'Bucket_6_sm'] = 1
-
-        print(self.out_df.columns)
 
     ##############################################################################################################
     #
-    # Functions relating to bucket 7
-    # ChEBML
+    # Functions relating to bucket 5
+    # High quality ChEBML compounds 
+    # (pchembl_value >=5.5 or if no pchembl_value, then 
+    #       any activity <=3000nM or 'k_on'/'Km' measure or 'deltaTm'/'Tm'>=2degreesC or 'Residual activity'<=10% or 'Activity'/'Imax'>=70%, or 'Emax'/'Efficacy'>=120%
+    # PFI <=7, structural_alerts <= 2)
     #
     ##############################################################################################################
 
@@ -508,8 +482,10 @@ class Small_molecule_buckets(object):
 
         if self.store_fetched: 
             alerts.to_csv("{}/sm_chembl_alerts.csv".format(self.store_fetched))
-
+        
+        # counting the alerts per compound
         alerts = alerts.groupby('canonical_smiles', as_index=False).count()
+        alerts.rename(columns={'alert_id': 'alert_id_count'}, inplace=True)
 
         return alerts
 
@@ -521,11 +497,11 @@ class Small_molecule_buckets(object):
 
     def _assess_chembl(self):
         '''
-        Does the target have ligands in ChEMBL (PFI <=7, SMART hits <= 2, scaffolds >= 2)
-        Scaffold counting currently not implemented
+        Does the target have ligands in ChEMBL (pchembl_value >= 5.5, PFI <=7, structural_alerts <= 2)
+        Scaffold counting currently not implemented (scaffolds >= 2)
         '''
 
-        print("\t- Assessing ChEMBL bucket 7...")
+        print("\t- Assessing ChEMBL bucket 5...")
         
         self._search_chembl()
         self.activities['pfi'] = self.activities.apply(self._calc_pfi, axis=1)
@@ -533,20 +509,20 @@ class Small_molecule_buckets(object):
         alerts = self._structural_alerts()
 
         self.activities = self.activities.merge(alerts, how='left', on='canonical_smiles')
-        self.activities['alert_id'].fillna(0, inplace=True)
+        self.activities['alert_id_count'].fillna(0, inplace=True)
         self.activities.to_csv("{}/sm_chembl_activities_processed.csv".format(self.store_fetched))
-        df = self.activities[(self.activities['pfi'] <= 7) & (self.activities['alert_id'] <= 2)]
+        df = self.activities[(self.activities['pfi'] <= 7) & (self.activities['alert_id_count'] <= 2)]
 
         f = {x: 'first' for x in df.columns}
         f['canonical_smiles'] = 'count'
         df2 = df.groupby('accession').agg(f).reset_index(drop=True)
         df2 = df2[['accession', 'canonical_smiles', 'target_chembl_id']]
         self.out_df = df2.merge(self.out_df, how='right', on='accession')
-        self.out_df['Bucket_7_sm'] = 0
+        self.out_df['Bucket_5_sm'] = 0
         self.out_df['target_chembl_id_y'] = self.out_df['target_chembl_id_y'].fillna(self.out_df['target_chembl_id_x'])
         self.out_df.rename(columns={'target_chembl_query_y': 'target_chembl_query'}, inplace=True)
 
-        self.out_df.loc[(self.out_df['canonical_smiles'] >= 2), 'Bucket_7_sm'] = 1
+        self.out_df.loc[(self.out_df['canonical_smiles'] >= 2), 'Bucket_5_sm'] = 1
 
         self.out_df.rename(columns={'canonical_smiles':'High_Quality_ChEMBL_compounds'}, inplace=True)
 
@@ -556,6 +532,39 @@ class Small_molecule_buckets(object):
         # PandasTools.AddMoleculeColumnToFrame(self.activities,'canonical_smiles','molecule')
         # PandasTools.AddMurckoToFrame(self.activities,molCol='molecule',MurckoCol='scaffold',Generic=True)
         # self.activities.to_csv('scaffolds.csv')
+
+
+    ##############################################################################################################
+    #
+    # Functions relating to buckets 6-7
+    # DrugEBIlity
+    #
+    ##############################################################################################################
+
+    def _assess_pockets(self):
+        '''
+        Does the target have a DrugEBIlity ensemble score >=0.7 (bucket 6) or  0<score<0.7 (bucket 7)
+        '''
+
+        print("\t- Assessing DrugEBIlity buckets 6 and 7...")
+
+        df = pd.read_csv(os.path.join(DATA_PATH, 'drugebility_scores.csv'))
+
+        df = df.merge(self.gene_xref, on='accession', how='right')
+        #print(df.dtypes)
+        df = df.groupby('ensembl_gene_id', as_index=False).max(numeric_only=True)
+        df['ensemble'].fillna(-1, inplace=True)
+        df.rename(columns={'ensemble': 'DrugEBIlity_score'}, inplace=True)
+
+        self.out_df = df.merge(self.out_df, how='right', on='ensembl_gene_id', suffixes=['_drop', ''])
+        self.out_df['Bucket_6_sm'] = 0
+        self.out_df['Bucket_7_sm'] = 0
+
+        self.out_df.loc[(self.out_df['DrugEBIlity_score'] >= 0.7), 'Bucket_6_sm'] = 1
+        self.out_df.loc[(self.out_df['DrugEBIlity_score'] > 0) & (self.out_df['DrugEBIlity_score'] < 0.7), 'Bucket_7_sm'] = 1
+
+        print(self.out_df.columns)
+
 
     ##############################################################################################################
     #
@@ -587,6 +596,7 @@ class Small_molecule_buckets(object):
 
         print(self.out_df.columns)
 
+
     ##############################################################################################################
     #
     # Functions relating to buckets 9
@@ -602,6 +612,7 @@ class Small_molecule_buckets(object):
         # print("\t- Assessing  bucket 9...")
 
         pass
+
 
     ##############################################################################################################
     #
@@ -632,10 +643,10 @@ class Small_molecule_buckets(object):
         return 1 * s['Bucket_1_sm'] + 0.7 * s['Bucket_2_sm'] + 0.2 * s['Bucket_3_sm']
 
     def _discovery_precedence(self, s):
-        return 0.7 * s['Bucket_4_sm'] + 0.3 * s['Bucket_7_sm']
+        return 0.7 * s['Bucket_4_sm'] + 0.3 * s['Bucket_5_sm']
 
     def _predicted_tractable(self, s):
-        return 0.7 * s['Bucket_5_sm'] + 0.3 * s['Bucket_6_sm'] + 0.3 * s['Bucket_8_sm']
+        return 0.7 * s['Bucket_6_sm'] + 0.3 * s['Bucket_7_sm'] + 0.3 * s['Bucket_8_sm']
 
     def assign_buckets(self):
         '''
@@ -645,8 +656,8 @@ class Small_molecule_buckets(object):
 
         self._assess_clinical()
         self._assess_pdb()
-        self._assess_pockets()
         self._assess_chembl()
+        self._assess_pockets()
         self._assess_druggable_genome()
         # self._assign_bucket_9()
         self._summarise_buckets()
@@ -667,8 +678,8 @@ class Small_molecule_buckets(object):
                                    'Bucket_7_sm', 'Bucket_8_sm', 
                                    'Bucket_sum_sm', 'Top_bucket_sm',
                                    'drug_chembl_ids_sm', 'drug_names_sm', 'clinical_phases_sm',
-                                   'DrugEBIlity_score', 'High_Quality_ChEMBL_compounds', 'Small_Molecule_Druggable_Genome_Member', 
-                                   'PDB_Known_Ligand', 'PDB_other'
+                                   'PDB_Known_Ligand', 'PDB_other',
+                                   'High_Quality_ChEMBL_compounds', 'DrugEBIlity_score', 'Small_Molecule_Druggable_Genome_Member' 
                                    ]]
 
         # Calculate category scores and assign highest category to each target
@@ -679,10 +690,10 @@ class Small_molecule_buckets(object):
         self.out_df['Predicted_Tractable_sm'] = self.out_df.apply(self._predicted_tractable, axis=1)
 
         self.out_df.loc[(self.out_df['Top_bucket_sm'] <= 3), 'Category_sm'] = 'Clinical_Precedence_sm'
-        self.out_df.loc[(self.out_df['Top_bucket_sm'] == 4) | (self.out_df['Top_bucket_sm'] == 7),
+        self.out_df.loc[(self.out_df['Top_bucket_sm'] == 4) | (self.out_df['Top_bucket_sm'] == 5),
                         'Category_sm'] = 'Discovery_Precedence_sm'
         self.out_df.loc[
-            (self.out_df['Top_bucket_sm'] == 5) | (self.out_df['Top_bucket_sm'] == 6) | (self.out_df['Top_bucket_sm'] == 8),
+            (self.out_df['Top_bucket_sm'] == 6) | (self.out_df['Top_bucket_sm'] == 7) | (self.out_df['Top_bucket_sm'] == 8),
             'Category_sm'] = 'Predicted_Tractable_sm'
 
         # self.out_df.sort_values(['Clinical_Precedence_sm', 'Discovery_Precedence_sm', 'Predicted_Tractable_sm'],
@@ -723,8 +734,8 @@ class Small_molecule_buckets(object):
 #            'Bucket_assessment_data': {'Bucket_1_2_3_sm': {'drug_chembl_ids_sm':d.drug_chembl_ids_sm, 'drug_names_sm':d.drug_names_sm}, 
             'Bucket_assessment_data': {'Bucket_1_2_3_sm': {'drugs_in_clinic':d.drug_names_dict_sm, 'max_clinical_phase':d.clinical_phases_sm}, 
                                      'Bucket_4_sm': {'PDB_known_ligands':d.PDB_Known_Ligand}, 
-                                     'Bucket_5-6_sm': {'DrugEBIlity_score':d.DrugEBIlity_score}, 
-                                     'Bucket_7_sm': {'number_high_quality_ChEMBL_compounds':d.High_Quality_ChEMBL_compounds}, 
+                                     'Bucket_5_sm': {'number_high_quality_ChEMBL_compounds':d.High_Quality_ChEMBL_compounds}, 
+                                     'Bucket_6-7_sm': {'DrugEBIlity_score':d.DrugEBIlity_score}, 
                                      'Bucket_8_sm': {'Small_Molecule_Druggable_Genome_Member':d.Small_Molecule_Druggable_Genome_Member}}
             }
 

@@ -102,7 +102,7 @@ pchembl_q = '''
     AND ass.relationship_type = 'D'
     AND (act.data_validity_comment is NULL OR act.data_validity_comment = 'Manually validated')
     AND act.potential_duplicate = 0
-    AND (act.pchembl_value is not NULL AND pchembl_value >= 5.5)
+    AND (act.pchembl_value is not NULL AND act.pchembl_value >= 5.5)
     AND md.molecule_type not in ('Oligonucleotide', 'Oligosaccharide')
     AND ((md.molecule_type in ('Protein', 'Unclassified', 'Unknown') AND cp.mw_freebase <= 1500) OR (md.molecule_type = 'Small molecule'))
     '''.format(CHEMBL_VERSION)
