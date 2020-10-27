@@ -2,10 +2,12 @@
 
 ## Introduction
 
-This pipeline has been developed to produce tractability data for a list of input Ensembl Gene IDs. This implementation
-is based on the public version of the GSK tractability pipeline, published [here](https://pubs.rsc.org/en/content/articlelanding/2018/md/c7md00633k#!divAbstract).
+This tractability pipeline has been developed to produce tractability data for a list of input Ensembl Gene IDs. This implementation
+is based on the public version of the GSK tractability pipeline, published [here](https://pubs.rsc.org/en/content/articlelanding/2018/md/c7md00633k#!divAbstract), 
+which assesses proteins of interest against a series of criteria leading to them being assigned to a tractability bucket based on either literature or derived knowledge. 
+This formalism formed the basis of the tractability schema recently implemented in the Open Targets platform.
 
-The pipeline assigns the provided targets to tractability buckets (usually 1 or 0) based on evidence from diverse resources.
+The Open Targets tractability pipeline assigns the provided targets to tractability buckets (usually 1 or 0) based on evidence from diverse resources.
 Information is provided for different potential drug modalities, which are subdivided into distinct workflows
 (where *X* = bucket number of the specific modality/workflow):
 - Small molecule tractability (buckets are denoted with "Bucket_*X*_sm"),
