@@ -109,13 +109,13 @@ Bucket 3 (ChEMBL) Targets with drug (other than SM or AB) in clinical phase 1
 
 In the primary TSV output there are several columns following the bucket columns providing additional data, which can be exploited by the user.  
 
-All workflows (*W*) have two bucket summary columns:
+All workflows (*W*) have two bucket summary columns:  
 'Bucket_sum_*W*' = sum of assessments for all binary buckets  
 'Top_bucket_*W*' = highest scoring bucket (lowest bucket number with a positive assignment)  
 
 Additionally, for all workflows overall tractability categories are assigned. 
 The attribution of a target to certain bucket results in a workflow category assignment (see details below for each workflow), 
-indicated with a score in a category column.  
+indicated with a score in a category column. 
 The categories are also summarized per workflow in the 'Top_Category_*W*' column, containing the name of the target's highest assigned category or 'Unknown'.
 
 
@@ -151,7 +151,7 @@ location names and their respective evidence codes provided by the evidence sour
 Columns 'Transmembrane' and 'Signal_peptide' contain the labels ['TRANSMEM'] (indicative for a transmembrane protein) and ['SIGNAL'] 
 (indicative for a signal peptide), provided by UniProt and related to bucket 7 assignment.
 Column 'HPA_main_location' contains the main location data provided by HPA if it is labelled with "Approved", "Enhanced" or "Supported" reliability; data related to bucket 9. 
-(The HPA data file can be found here: 'https://www.proteinatlas.org/download/subcellular_location.tsv.zip' and 
+(The complete HPA data file can be found here: 'https://www.proteinatlas.org/download/subcellular_location.tsv.zip' and 
 more on HPA Reliability scores can be found here: 'https://www.proteinatlas.org/about/assays+annotation#if_reliability_score'.)  
 
 
@@ -168,17 +168,18 @@ This data is not represented by a bucket.
 Column 'Uniprot_keyword' indicates whether a target has the keyword: "Ubl conjugation [KW-0832]" annotated in UniProt and relates to bucket 5
 Column 'Uniprot_PTM' contains additional information on posttranslational modifications from UniProt and is not associated with a bucket.  
 Column 'Uniprot_CrossLink' contains additional information on crosslinks from UniProt and is not associated with a bucket.  
-Columns 'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013' and 'number_of_ubiquitination_sites' relate to bucket 6 and represent information available from the two databases PhosphoSitePlus and mUbiSiDa and the dataset from Woong et al., respectively  
+Columns 'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013' and 'number_of_ubiquitination_sites' relate to bucket 6 and represent information available 
+from the two databases PhosphoSitePlus and mUbiSiDa and the dataset from Woong et al., respectively.  
 Columns 'Max_halflife' and 'Min_halflife' contain the max/min values of half-life data means measured in different cell types from Mathieson et al. and provides more detail to bucket 7 assessment. 
 The available data is provided in columns 'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean'.  
 Column 'count_compound_chembl_ids_PROTAC' contains the number of compounds found in ChEMBL related to bucket 8.
 
-###### Additional files & tools:  
+##### Additional files & tools:  
 Files from the automated assessment process where specific targets are first tagged using an implementation from Europe PMC (Europe PMC Annotations API provides text mining annotations contained in abstracts and open access full text articles, 
 using the W3C Open Annotation Data Model https://europepmc.org/AnnotationsApi), where we consider annotations from abstracts, followed by mapping to their respective human UniProt IDs. This enables detailed target information to be provided to 
 the user in the form of three different lists (that can be found in the pipelines "fetched data" output directory): 1) a complete list with all detected targets (named "protac_literature_evidence.csv") and two subsets 2) targets that are 
 associated with the ubiquitin ligase complex, including E3 ligases (filtering is based on evidence from the respective UniProt entry text; named "protac_literature_evidence_ubi_ligase_complex.csv"), and 3) the remaining targets (named 
-"protac_literature_evidence_filtered.csv"). A literature count is provided per target with publication titles, links, full abstract texts.  
+"protac_literature_evidence_filtered.csv"). A literature count is provided per target with publication titles, links and full abstract texts.  
 
 To aid further in literature data processing with respect to detection of PROTAC relevant information additional Natural Language Processing (NLP) is performed with a Named Entity Recognition (NER) model that has been trained and implemented for 
 automatic detection of the entities "PROTAC_TARGET", "PROTAC_NAME", and "E3_LIGASE". The ScispaCy (Neumann et al. 2019) pre-trained model "en_ner_jnlpba_md" (trained on the JNLPBA corpus) was used to retrain the PROTAC-NER model on 164 abstracts 
