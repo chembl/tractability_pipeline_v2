@@ -9,7 +9,7 @@ This formalism formed the basis of the tractability schema recently implemented 
 
 The Open Targets tractability pipeline assigns the provided targets to tractability buckets (usually 1 or 0) based on evidence from diverse resources.
 Information is provided for different potential drug modalities, which are subdivided into distinct workflows
-(where *X* = bucket number of the specific modality/workflow):
+(where *X* = bucket number of the specific modality workflow):
 - Small molecule tractability (buckets are denoted with "Bucket_*X*_sm"),
 - Antibody tractability (buckets with "Bucket_*X*_ab"), 
 - PROTAC tractability (buckets with "Bucket_*X*_PROTAC" and an additional "PROTAC_location_Bucket"), and 
