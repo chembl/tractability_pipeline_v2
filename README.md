@@ -173,7 +173,7 @@ Columns 'Max_halflife' and 'Min_halflife' contain the max/min values of half-lif
 The available data is provided in columns 'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean'.  
 Column 'count_compound_chembl_ids_PROTAC' contains the number of compounds found in ChEMBL related to bucket 8.
 
-######Additional files & tools:  
+###### Additional files & tools:  
 Files from the automated assessment process where specific targets are first tagged using an implementation from Europe PMC (Europe PMC Annotations API provides text mining annotations contained in abstracts and open access full text articles, 
 using the W3C Open Annotation Data Model https://europepmc.org/AnnotationsApi), where we consider annotations from abstracts, followed by mapping to their respective human UniProt IDs. This enables detailed target information to be provided to 
 the user in the form of three different lists (that can be found in the pipelines "fetched data" output directory): 1) a complete list with all detected targets (named "protac_literature_evidence.csv") and two subsets 2) targets that are 
