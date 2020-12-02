@@ -82,8 +82,8 @@ chembl_small_mol_active_targets = """
         {0}.assays a,
         {0}.target_dictionary td,
         {0}.target_components tc,
-        {0}.component_sequences cs
-        {0}.compound_properties cp,
+        {0}.component_sequences cs,
+        {0}.compound_properties cp
     WHERE md.molregno = mh.molregno
     AND md.molregno = act.molregno 
     AND md.molregno = cp.molregno

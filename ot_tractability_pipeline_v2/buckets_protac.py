@@ -61,13 +61,14 @@ class Protac_buckets(object):
         # ChEMBL DB connection
         self.engine = Pipeline_setup.engine
 
+        # Human proteome data loaded into here
+        self.human_proteome = Pipeline_setup.human_proteome
+        
         # # use function from Pipeline setup
         # self.make_request = Pipeline_setup.make_request
 
         # All chembl data loaded into here
         self.all_chembl_targets = None
-        # Human proteome data loaded into here
-        self.human_proteome = None
 
         # If antibody results are to be combined with small molecule results, append antibody columns to sm results
         # Otherwise, use the id_xref dataframe
@@ -79,180 +80,171 @@ class Protac_buckets(object):
         else:
             self.out_df = self.id_xref
                         
-            '''
-            Uniprot (loc)
-            '''
-            try:
-                # try reading the output from store_tetched antibody pipeline to avoid getting data again
-                uniprot_loc_data = pd.read_csv("{}/ab_uniprot_locations_processed.csv".format(self.store_fetched))
-                # self.out_uniprot_loc_data = self.out_uniprot_loc_data.merge(uniprot_loc_data, how='left', on='accession')
+        '''
+        Uniprot (loc)
+        '''
+#            try:
+#                # try reading the output from store_tetched antibody pipeline to avoid getting data again
+#                uniprot_loc_data = pd.read_csv("{}/ab_uniprot_locations_processed.csv".format(self.store_fetched))
+#                # self.out_uniprot_loc_data = self.out_uniprot_loc_data.merge(uniprot_loc_data, how='left', on='accession')
+#
+#            except IOError:
+#                print("--- \nWarning in PROTAC workflow: Uniprot location file 'ab_uniprot_locations_processed.csv' is not available \
+#                      from antibody workflow. (see section 'Uniprot (loc)' in buckets_ab.py) \n-> trying to reasses from source \nThis will take some time ...\n---")
+#                uniprot_loc_data = None
+#            
+#            if uniprot_loc_data is None:
+#                #=============================================================================
+#                #    The following code is only executed if no previously calculated ab_uniprot_locations_processed.csv is found     
+#                #=============================================================================
+#                
+#                from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
+#                # make_request = Antibody_buckets.make_request
+#                # post_request_uniprot = Antibody_buckets.post_request_uniprot
+#                # split_loc = Antibody_buckets.split_loc
+#                # _check_evidence = Antibody_buckets._check_evidence
+#                            
+#                # Return all reviewed and Human targets
+#                url = "uniprot/?format=tab&query=*&fil=reviewed%3ayes+AND+organism%3a%22Homo+sapiens+(Human)+%5b9606%5d%22&columns=id,comment(SUBCELLULAR+LOCATION),comment(DOMAIN),feature(DOMAIN+EXTENT),feature(INTRAMEMBRANE),feature(TOPOLOGICAL+DOMAIN),feature(TRANSMEMBRANE),feature(SIGNAL)"
+#                data = ['P42336', 'P60484']
+#                location = Antibody_buckets.post_request_uniprot(url, data)
+#                location = [x.split('\t') for x in location.split('\n')]
+#                uniprot_loc_data = pd.DataFrame(location[1:], columns=location[0])
+#                uniprot_loc_data['uniprot_loc_test'] = uniprot_loc_data['Subcellular location [CC]']
+#                uniprot_loc_data['Subcellular location [CC]'] = uniprot_loc_data['Subcellular location [CC]'].apply(Antibody_buckets.split_loc)
+#        
+#                uniprot_loc_data.rename(columns={'Entry': 'accession'}, inplace=True)
 
-            except IOError:
-                print("--- \nWarning in PROTAC workflow: Uniprot location file 'ab_uniprot_locations_processed.csv' is not available \
-                      from antibody workflow. (see section 'Uniprot (loc)' in buckets_ab.py) \n-> trying to reasses from source \nThis will take some time ...\n---")
-                uniprot_loc_data = None
-            
+        if 'Uniprot_high_conf_loc' not in self.out_df.columns:
             # =============================================================================
-            #     The following code is only executed if no previously calculated ab_uniprot_locations_processed.csv is found     
+            #     The following code is only executed if no previously generated Uniprot_high_conf_loc column is found     
             # =============================================================================
-            if uniprot_loc_data is None:
-                
-                from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
-                # make_request = Antibody_buckets.make_request
-                # post_request_uniprot = Antibody_buckets.post_request_uniprot
-                # split_loc = Antibody_buckets.split_loc
-                # _check_evidence = Antibody_buckets._check_evidence
-                            
-                # Return all reviewed and Human targets
-                url = "uniprot/?format=tab&query=*&fil=reviewed%3ayes+AND+organism%3a%22Homo+sapiens+(Human)+%5b9606%5d%22&columns=id,comment(SUBCELLULAR+LOCATION),comment(DOMAIN),feature(DOMAIN+EXTENT),feature(INTRAMEMBRANE),feature(TOPOLOGICAL+DOMAIN),feature(TRANSMEMBRANE),feature(SIGNAL)"
-                data = ['P42336', 'P60484']
-                location = Antibody_buckets.post_request_uniprot(url, data)
-                location = [x.split('\t') for x in location.split('\n')]
-                uniprot_loc_data = pd.DataFrame(location[1:], columns=location[0])
-                uniprot_loc_data['uniprot_loc_test'] = uniprot_loc_data['Subcellular location [CC]']
-                uniprot_loc_data['Subcellular location [CC]'] = uniprot_loc_data['Subcellular location [CC]'].apply(Antibody_buckets.split_loc)
-        
-                uniprot_loc_data.rename(columns={'Entry': 'accession'}, inplace=True)
-        
-                def get_uniprot_high_conf(s):            
-                    all_uniprot_high_conf = [(a[1], a[0]) for a in s['Subcellular location [CC]'] if Antibody_buckets._check_evidence(a[0])]    
-                    return all_uniprot_high_conf
+            print("\t--- Processed UniProt location data (columns 'Uniprot_high_conf_loc' and 'Uniprot_med_conf_loc') is not available. \
+                  Processing UniProt location data ... ---")
+            from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
+            # UniProt location data is already fetched in Pipeline setup
+            # Copy original data column for eventual later comparison
+            self.out_df['original_uniprot_location_data'] = self.out_df['Subcellular location [CC]']
+            # Process the delimited string returned from uniprot webservice call
+            self.out_df['Subcellular location [CC]'] = self.out_df['Subcellular location [CC]'].apply(Antibody_buckets.split_loc)
+            # Assign UniProt high and medium confidence locations 
 
-                def get_uniprot_med_conf(s):            
-                    all_uniprot_med_conf = [(a[1], a[0]) for a in s['Subcellular location [CC]'] if not Antibody_buckets._check_evidence(a[0])]
-                    return all_uniprot_med_conf
-        
-                uniprot_loc_data['Uniprot_high_conf_loc'] = zip(*uniprot_loc_data.apply(get_uniprot_high_conf, axis=1))
-                uniprot_loc_data['Uniprot_med_conf_loc'] = zip(*uniprot_loc_data.apply(get_uniprot_med_conf, axis=1))
-                # uniprot_loc_data['Uniprot_high_conf_loc'] = zip(*uniprot_loc_data.apply(Antibody_buckets.get_uniprot_high_conf, axis=1))
-                # uniprot_loc_data['Uniprot_med_conf_loc'] = zip(*uniprot_loc_data.apply(Antibody_buckets.get_uniprot_med_conf, axis=1))
+            def get_uniprot_high_conf(s):            
+                all_uniprot_high_conf = [(a[1], a[0]) for a in s['Subcellular location [CC]'] if Antibody_buckets._check_evidence(a[0])]    
+                return all_uniprot_high_conf
+
+            def get_uniprot_med_conf(s):            
+                all_uniprot_med_conf = [(a[1], a[0]) for a in s['Subcellular location [CC]'] if not Antibody_buckets._check_evidence(a[0])]
+                return all_uniprot_med_conf
     
-                if self.store_fetched: 
-                    uniprot_loc_data.to_csv("{}/protac_uniprot_location.csv".format(self.store_fetched))
+            self.out_df['Uniprot_high_conf_loc'] = self.out_df.apply(get_uniprot_high_conf, axis=1)
+            self.out_df['Uniprot_med_conf_loc'] = self.out_df.apply(get_uniprot_med_conf, axis=1)
 
-            else:
-                print("\t--- Uniprot location data used from Antibody workflow ---")
+#                if self.store_fetched: 
+#                    uniprot_loc_data.to_csv("{}/protac_uniprot_locations_processed.csv".format(self.store_fetched))
 
-            # finally:
-            print(uniprot_loc_data.columns)
-            self.out_df = self.out_df.merge(uniprot_loc_data, how='left', on='accession')
-            # print(self.out_df.columns)
+        else:
+            print("\t--- Already available processed UniProt location data is used. ---")
 
-            '''
-            GO CC (loc)
-            '''
-            try:
-                # try reading the output from store_tetched antibody pipeline to avoid getting data again
-                go_loc_data = pd.read_csv("{}/ab_GO_locations_processed.csv".format(self.store_fetched))
-                print("\t--- GO location data used from Antibody workflow file ab_GO_locations_processed.csv ---")
-                self.out_df = self.out_df.merge(go_loc_data, how='left', on='accession')
-                
-            except IOError:
-                print("--- \nWarning in PROTAC workflow: GO location file 'ab_GO_locations_processed.csv' is not available \
-                      from antibody workflow. (see section 'GO CC' in buckets_ab.py) \n-> trying to reasses from source \nThis will take some time ...\n---")
-                go_loc_data = None
-       
-            # =============================================================================
-            #     The following code is only executed if no previously calculated ab_GO_locations_processed.csv is found     
-            # =============================================================================
-            if go_loc_data is None:
-                # go_loc_data = self.out_df
-                
-                def get_go_loc(s):
-                    try:
-                        cc = s['go.CC']
-                    except:
-                        # return 0, [], 0, []
-                        return [], []
+        # finally:
+        #print(uniprot_loc_data.columns)
+        #self.out_df = self.out_df.merge(uniprot_loc_data, how='left', on='accession')
+        print(self.out_df.columns)
+
+        '''
+        GO CC (loc)
+        '''
+        try:
+            # try reading the output from store_tetched antibody pipeline to avoid getting data again
+            go_loc_data = pd.read_csv("{}/ab_GO_locations_processed.csv".format(self.store_fetched))
+            print("\t--- GO location data used from Antibody workflow file ab_GO_locations_processed.csv ---")
+            self.out_df = self.out_df.merge(go_loc_data, how='left', on='accession')
             
-                    # Confidence for each evidence type
-                    evidence_types = {'EXP': 'High', 'IDA': 'High', 'IPI': 'High', 'TAS': 'High', 'IMP': 'High', 'IGI': 'High',
-                                      'IEP': 'High',
-                                      'ISS': 'Medium', 'ISO': 'Medium', 'ISA': 'Medium', 'ISM': 'Medium', 'IGC': 'Medium',
-                                      'IBA': 'Medium', 'IBD': 'Medium', 'IKR': 'Medium', 'IRD': 'Medium', 'RCA': 'Medium',
-                                      'IEA': 'Medium',
-                                      'NAS': 'Low', 'IC': 'Low', 'ND': 'Low', 'NR': 'Low'
-                                      }
+        except IOError:
+            print("--- \nWarning in PROTAC workflow: GO location file 'ab_GO_locations_processed.csv' is not available \
+                  from antibody workflow. (see section 'GO CC' in buckets_ab.py) \n-> trying to reasses from source \nThis will take some time ...\n---")
+            go_loc_data = None
+   
+        if go_loc_data is None:
+        # =============================================================================
+        #     The following code is only executed if no previously calculated ab_GO_locations_processed.csv is found     
+        # =============================================================================
+            # go_loc_data = self.out_df
             
-                    high_conf_loc = []
-                    med_conf_loc = []
-                    accepted_high_conf_loc = []
-                    accepted_med_conf_loc = []
-            
-                    if isinstance(cc, dict):
-                        cc = [cc]
-            
-                    if not isinstance(cc, list):
-                        # return 0, [], 0, []
-                        return [], []
-            
-                    for c_dict in cc:
-                        try:
-                            go_id = c_dict['id']
-                            go_loc = c_dict['term']
-                            evidence = c_dict['evidence']
-                        except TypeError:
-                            continue
-                        try:
-                            confidence = evidence_types[evidence]
-                        except KeyError:
-                            confidence = None
-            
-                        if confidence == 'High':
-                            high_conf_loc.append((go_loc, evidence))
-                        elif confidence == 'Medium':
-                            med_conf_loc.append((go_loc, evidence))
-            
-                        if go_id in Antibody_buckets.accepted_go_locs.keys():
-                            if confidence == 'High':
-                                accepted_high_conf_loc.append(go_loc)
-                            elif confidence == 'Medium':
-                                accepted_med_conf_loc.append(go_loc)
-            
-                    # b5_flag = 0
-                    # b8_flag = 0
-            
-                    # if len(accepted_high_conf_loc) > 0:
-                    #     b5_flag = 1
-                    # elif len(accepted_med_conf_loc) > 0:
-                    #     b8_flag = 1
-            
-                    # return b5_flag, high_conf_loc, b8_flag, med_conf_loc
-                    return high_conf_loc, med_conf_loc
-            
-                '''
-                GO CC
-                '''
-                # self.out_df['Bucket_5_ab'], self.out_df['GO_high_conf_loc'], self.out_df['Bucket_8_ab'], self.out_df[
-                #     'GO_med_conf_loc'] = zip(*self.out_df.apply(self.get_go_loc, axis=1))
-                # go_loc_data['GO_high_conf_loc'], go_loc_data['GO_med_conf_loc'] = zip(*go_loc_data.apply(get_go_loc, axis=1))
-                self.out_df['GO_high_conf_loc'], self.out_df['GO_med_conf_loc'] = zip(*self.out_df.apply(get_go_loc, axis=1))
-                
-                # save processed GO location info to file
-                if self.store_fetched: 
-                    # go_loc_data.loc[:, go_loc_data.columns.isin(['accession', 'GO_high_conf_loc', 'GO_med_conf_loc'])].to_csv(
-                    #     "{}/protac_GO_locations_processed.csv".format(self.store_fetched))
-                    self.out_df.loc[:, self.out_df.columns.isin(['accession', 'GO_high_conf_loc', 'GO_med_conf_loc'])].to_csv(
-                        "{}/protac_GO_locations_processed.csv".format(self.store_fetched))
+            def get_go_loc(s):
+                try:
+                    cc = s['go.CC']
+                except:
+                    # return 0, [], 0, []
+                    return [], []
         
-                # print(go_loc_data.columns)
-                print(self.out_df.columns)
-                
+                # Confidence for each evidence type
+                evidence_types = {'EXP': 'High', 'IDA': 'High', 'IPI': 'High', 'TAS': 'High', 'IMP': 'High', 'IGI': 'High',
+                                  'IEP': 'High',
+                                  'ISS': 'Medium', 'ISO': 'Medium', 'ISA': 'Medium', 'ISM': 'Medium', 'IGC': 'Medium',
+                                  'IBA': 'Medium', 'IBD': 'Medium', 'IKR': 'Medium', 'IRD': 'Medium', 'RCA': 'Medium',
+                                  'IEA': 'Medium',
+                                  'NAS': 'Low', 'IC': 'Low', 'ND': 'Low', 'NR': 'Low'
+                                  }
+        
+                high_conf_loc = []
+                med_conf_loc = []
+#                    accepted_high_conf_loc = []
+#                    accepted_med_conf_loc = []
+        
+                if isinstance(cc, dict):
+                    cc = [cc]
+        
+                if not isinstance(cc, list):
+                    # return 0, [], 0, []
+                    return [], []
+        
+                for c_dict in cc:
+                    try:
+                        go_id = c_dict['id']
+                        go_loc = c_dict['term']
+                        evidence = c_dict['evidence']
+                    except TypeError:
+                        continue
+                    try:
+                        confidence = evidence_types[evidence]
+                    except KeyError:
+                        confidence = None
+        
+                    if confidence == 'High':
+                        high_conf_loc.append((go_loc, evidence))
+                    elif confidence == 'Medium':
+                        med_conf_loc.append((go_loc, evidence))
+        
+                return high_conf_loc, med_conf_loc
+        
+            '''
+            GO CC
+            '''
+            self.out_df['GO_high_conf_loc'], self.out_df['GO_med_conf_loc'] = zip(*self.out_df.apply(get_go_loc, axis=1))
+            
+            # save processed GO location info to file
+            if self.store_fetched: 
+                self.out_df.loc[:, self.out_df.columns.isin(['accession', 'GO_high_conf_loc', 'GO_med_conf_loc'])].to_csv(
+                    "{}/protac_GO_locations_processed.csv".format(self.store_fetched))
+    
+            print(self.out_df.columns)
+            
 
-            else:
-                # print("\t--- GO location data used from Antibody workflow ---")
-                print(go_loc_data.columns)
-                print(self.out_df.columns)
+        else:
+            # print("\t--- GO location data used from Antibody workflow ---")
+            #print(go_loc_data.columns)
+            print(self.out_df.columns)
 
 
-        # ChEMBL currently not used
+    # ChEMBL currently not used
 
-        # if database_url is None:
-        #     database_url = os.getenv('CHEMBL_DB')
-        #
-        #
-        # # Create ChEMBL DB connection
-        # self.engine = create_engine(database_url)        
+    # if database_url is None:
+    #     database_url = os.getenv('CHEMBL_DB')
+    #
+    #
+    # # Create ChEMBL DB connection
+    # self.engine = create_engine(database_url)        
 
 
     ##############################################################################################################
@@ -261,56 +253,6 @@ class Protac_buckets(object):
     # 
     #
     ##############################################################################################################
-
-    def _high_conf_locations(self, row):
-
-        if isinstance(row['Uniprot_high_conf_loc'], str):
-            if len(row['Uniprot_high_conf_loc']) == 0:
-                row['Uniprot_high_conf_loc'] = []
-            else: 
-                row['Uniprot_high_conf_loc'] = eval(row['Uniprot_high_conf_loc'])
-
-        if isinstance(row['GO_high_conf_loc'], str):
-            if len(row['GO_high_conf_loc']) == 0:
-                row['GO_high_conf_loc'] = []
-            else: 
-                row['GO_high_conf_loc'] = eval(row['GO_high_conf_loc'])
-
-        try:
-            len(row['Uniprot_high_conf_loc'])
-        except TypeError:
-            row['Uniprot_high_conf_loc'] = []
-
-        try:
-            len(row['GO_high_conf_loc'])
-        except TypeError:
-            row['GO_high_conf_loc'] = []
-
-        if len(row['Uniprot_high_conf_loc']) == 0 and len(row['GO_high_conf_loc']) == 0 and row['PROTAC_location_Bucket'] == 5:
-            return 5
-
-        # locations = [x[0].lower().strip() for x in eval(row['Uniprot_high_conf_loc'])] + [x[0] for x in eval(row['GO_high_conf_loc'])]
-        locations = [x[0].lower().strip() for x in row['Uniprot_high_conf_loc']] + [x[0] for x in row['GO_high_conf_loc']]
-        accepted_locations = list(set(locations) & set(self.good_locations))
-        grey_locations = list(set(locations) & set(self.grey_locations))
-        # bad_locations = list(set(locations) & set(self.bad_locations))
-
-        if len(accepted_locations) > 0:
-            return 1
-        elif len(grey_locations) > 0:
-            return 3
-        # elif len(bad_locations) > 0:
-        #     return 7
-        
-        # Taking into account medium conf assessment (not overriding score 2 and 4; only 6); If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
-        elif (row['PROTAC_location_Bucket'] == 6) and (len(locations) > 0):
-            return 7
-#        # If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
-#        elif len(locations) > 0:
-#            return 7
-        else:
-            #print('locations',locations, 'accepted', accepted_locations, 'grey', grey_locations)
-            return row['PROTAC_location_Bucket']
 
 
     def _med_conf_locations(self,row):
@@ -360,6 +302,63 @@ class Protac_buckets(object):
             return 6
  
 
+    def _high_conf_locations(self, row):
+
+        if isinstance(row['Uniprot_high_conf_loc'], str):
+            if len(row['Uniprot_high_conf_loc']) == 0:
+                row['Uniprot_high_conf_loc'] = []
+            else: 
+                row['Uniprot_high_conf_loc'] = eval(row['Uniprot_high_conf_loc'])
+
+        if isinstance(row['GO_high_conf_loc'], str):
+            if len(row['GO_high_conf_loc']) == 0:
+                row['GO_high_conf_loc'] = []
+            else: 
+                row['GO_high_conf_loc'] = eval(row['GO_high_conf_loc'])
+
+        try:
+            len(row['Uniprot_high_conf_loc'])
+        except TypeError:
+            row['Uniprot_high_conf_loc'] = []
+
+        try:
+            len(row['GO_high_conf_loc'])
+        except TypeError:
+            row['GO_high_conf_loc'] = []
+
+        if len(row['Uniprot_high_conf_loc']) == 0 and len(row['GO_high_conf_loc']) == 0 and row['PROTAC_location_Bucket'] == 5:
+            # If information on GO CC is provided by uniprot return as medium confidence good/grey location
+            if row['Gene ontology (cellular component)'] != '' and any(x in row['Gene ontology (cellular component)'] for x in self.good_locations):
+                return 2
+            elif row['Gene ontology (cellular component)'] != '' and any(x in row['Gene ontology (cellular component)'] for x in self.grey_locations):
+                return 4
+            else: 
+                return 5
+
+        # locations = [x[0].lower().strip() for x in eval(row['Uniprot_high_conf_loc'])] + [x[0] for x in eval(row['GO_high_conf_loc'])]
+        locations = [x[0].lower().strip() for x in row['Uniprot_high_conf_loc']] + [x[0] for x in row['GO_high_conf_loc']]
+        accepted_locations = list(set(locations) & set(self.good_locations))
+        grey_locations = list(set(locations) & set(self.grey_locations))
+        # bad_locations = list(set(locations) & set(self.bad_locations))
+
+        if len(accepted_locations) > 0:
+            return 1
+        elif len(grey_locations) > 0:
+            return 3
+        # elif len(bad_locations) > 0:
+        #     return 7
+        
+        # Taking into account medium conf assessment (not overriding score 2 and 4; only 6); If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
+        elif (row['PROTAC_location_Bucket'] == 6) and (len(locations) > 0):
+            return 7
+#        # If high conf locations are known, but not in self.good_locations or self.grey_locations, they are assumed to be bad
+#        elif len(locations) > 0:
+#            return 7
+        else:
+            #print('locations',locations, 'accepted', accepted_locations, 'grey', grey_locations)
+            return row['PROTAC_location_Bucket']
+
+
     def _PROTAC_location_bucket(self):
 
         ''''
@@ -378,15 +377,15 @@ class Protac_buckets(object):
         print("\t- Assessing PROTAC location bucket...")
 
         self.good_locations = ['cytoplasm', 'cytosol', 'nucleus', 'nucleolus', 'nucleoplasm', 'nucleus matrix']
-        self.grey_locations = ['membrane', 'nuclear pore complex', 
+        self.grey_locations = ["membrane", "nuclear pore complex", 
                                "cell membrane", "plasma membrane", "cytoplasmic membrane", "plasmalemma", 
                                "apical cell membrane", "apical plasma membrane", 
                                "apicolateral cell membrane", "apicolateral plasma membrane", 
                                "basal cell membrane", "basal plasma membrane", 
                                "basolateral cell membrane", "basolateral plasma membrane", 
                                "lateral cell membrane", "lateral plasma membrane", 
-                               "synaptic cell membrane", "presynaptic cell membrane", "postsynaptic cell membrane", "synaptic vesicle membrane", 
-                               "endosome membrane", "pseudopodium membrane", "bud membrane", "caveola", 
+                               "synaptic cell membrane", "presynaptic cell membrane", "postsynaptic cell membrane", 
+                               "synaptic vesicle membrane", "pseudopodium membrane", "bud membrane", "caveola", 
                                "filopodium membrane", "flagellum membrane", "cilium membrane", "ciliary membrane",
                                "endoplasmic reticulum membrane", "rough endoplasmic reticulum membrane", "smooth endoplasmic reticulum membrane", 
                                "Golgi membrane", "golgi membrane", "golgi apparatus membrane", "golgi stack membrane", "trans-golgi network membrane",
@@ -400,6 +399,8 @@ class Protac_buckets(object):
         self.out_df['PROTAC_location_Bucket'] = self.out_df.apply(self._high_conf_locations, axis=1)
 
         print(self.out_df.columns)
+        if self.store_fetched: 
+            self.out_df.to_csv("{}/Checkpoint_PROTAC.csv".format(self.store_fetched))
 
 
 
@@ -530,33 +531,35 @@ class Protac_buckets(object):
             return None
 
     
-    @staticmethod
-    def _get_human_proteome():
-        '''
-        Getting the human proteome from UniProt; processing entry, gene, and protein names
-        '''
-        full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes'
-        from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
-        Uniprot_human_proteome = Antibody_buckets.make_request(full_url, data=None)
-        Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
-        human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
-        human_proteome.rename(columns={'Entry': 'accession'}, inplace=True)
-        # only keep row when 'Entry name' is available (discard NAN row)
-        human_proteome = human_proteome.loc[human_proteome['Entry name'].notna()]
-        # create 'symbol' column
-        human_proteome[['symbol','Human']] = human_proteome['Entry name'].str.split("_",expand=True)
-        # create 'gene_name' column (using first entry in 'Gene names')
-        human_proteome['gene_name'] = human_proteome['Gene names'].str.split(" ",expand=True)[0]
-        # create 'protein_name' column (using primary entry, before names in parentheses in 'Protein names', escaping with \\ is reqired)
-        human_proteome['protein_name'] = human_proteome['Protein names'].str.split(" \\(",expand=True)[0]
-        # save lower case protein name for future case insensitive mapping
-        human_proteome['protein_name_lower'] = human_proteome['protein_name'].str.lower()
-        # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
-        # (which should be the primary UniProtID) count: 20487
-        human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
-        
-        return human_proteome
-
+# =============================================================================
+#     @staticmethod
+#     def _get_human_proteome():
+#         '''
+#         Getting the human proteome from UniProt; processing entry, gene, and protein names
+#         '''
+#         full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes'
+#         from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
+#         Uniprot_human_proteome = Antibody_buckets.make_request(full_url, data=None)
+#         Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
+#         human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
+#         human_proteome.rename(columns={'Entry': 'accession'}, inplace=True)
+#         # only keep row when 'Entry name' is available (discard NAN row)
+#         human_proteome = human_proteome.loc[human_proteome['Entry name'].notna()]
+#         # create 'symbol' column
+#         human_proteome[['symbol','Human']] = human_proteome['Entry name'].str.split("_",expand=True)
+#         # create 'gene_name' column (using first entry in 'Gene names')
+#         human_proteome['gene_name'] = human_proteome['Gene names'].str.split(" ",expand=True)[0]
+#         # create 'protein_name' column (using primary entry, before names in parentheses in 'Protein names', escaping with \\ is reqired)
+#         human_proteome['protein_name'] = human_proteome['Protein names'].str.split(" \\(",expand=True)[0]
+#         # save lower case protein name for future case insensitive mapping
+#         human_proteome['protein_name_lower'] = human_proteome['protein_name'].str.lower()
+#         # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
+#         # (which should be the primary UniProtID) count: 20487
+#         human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
+#         
+#         return human_proteome
+# 
+# =============================================================================
 
     def _process_IDs(self):
         '''
@@ -584,7 +587,8 @@ class Protac_buckets(object):
         joined['name_lower'] = joined['name'].str.lower()
         
         # 2) ---
-        human_proteome = self._get_human_proteome()
+        #human_proteome = self._get_human_proteome()
+        human_proteome = self.human_proteome
         # Join on human_proteome data to get human UniProt accession IDs:
         # 1. join with human_proteome on 'symbol' (higher chances of getting the correct/dominant isoform)
         # 2. join with human_proteome on 'gene_name' (occurs several times, for all isoforms)
@@ -616,7 +620,7 @@ class Protac_buckets(object):
         tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['EuropePMC_accession'])
 
         # safe human_proteome into global variable for later use in other buckets
-        self.human_proteome = human_proteome[['accession','symbol','gene_name','protein_name']]
+        #self.human_proteome = human_proteome[['accession','symbol','gene_name','protein_name']]
 
         if self.store_fetched: 
             tagged_targets_df.to_csv("{}/protac_pmc_tagged_targets_raw.csv".format(self.store_fetched), encoding='utf-8')
@@ -779,8 +783,8 @@ class Protac_buckets(object):
         # count literature per target and append as column
         self.out_df['literature_count_PROTAC'] = [len(x) for x in ast.literal_eval(",".join(self.out_df['full_id'].fillna("['']",inplace=False).astype(str).replace(to_replace="['']",value="''",inplace=False)))]
 
-        # adding protein_name from human_proteome to self.out_df
-        self.out_df = self.human_proteome[['accession','protein_name']].merge(self.out_df, how='right', on='accession')        
+        ## adding protein_name from human_proteome to self.out_df
+        #self.out_df = self.human_proteome[['accession','protein_name']].merge(self.out_df, how='right', on='accession')        
         # removing duplicated rows        
         self.out_df = self.out_df.drop_duplicates(['ensembl_gene_id'], ignore_index=True)
         #self.out_df = self.out_df.loc[self.out_df.astype(str).drop_duplicates(ignore_index=True).index]
@@ -871,7 +875,8 @@ class Protac_buckets(object):
         PhosphoSitePlus = pd.read_csv(os.path.join(DATA_PATH, "PSP_Ubiquitination_site_dataset"), skiprows=3, sep='\t')
         mUbiSiDa = pd.read_excel(os.path.join(DATA_PATH, "mUbiSiDa_data_2013_10_22.xlsx"), header=None)
         ub_df = pd.read_csv(os.path.join(DATA_PATH, 'ubiquitination_sites.csv'))
-        self.out_df = ub_df.merge(self.out_df, on='symbol', how='right')
+        #self.out_df = ub_df.merge(self.out_df, on='symbol', how='right')
+        self.out_df = self.out_df.merge(ub_df, on='symbol', how='left')
 
         self.out_df['Ub_PhosphoSitePlus'] = 0
         self.out_df['Ub_mUbiSiDa_2013'] = 0
@@ -1175,14 +1180,14 @@ class Protac_buckets(object):
         self.out_df.loc[((self.out_df['Bucket_5_PROTAC'] == 1) | (self.out_df['Bucket_6_PROTAC'] == 1)) &
                         (self.out_df['Bucket_7_PROTAC'] == 1) & 
                         (self.out_df['Bucket_8_PROTAC'] == 1) & 
-                        (self.out_df['PROTAC_location_Bucket'] <= 2),
+                        (self.out_df['PROTAC_location_Bucket'] <= 4),
                         'Discovery_Opportunity_PROTAC'] = 1
 
         self.out_df['Category_PROTAC'] = 'Unknown'
         self.out_df.loc[((self.out_df['Bucket_5_PROTAC'] == 1) | (self.out_df['Bucket_6_PROTAC'] == 1)) &
                         (self.out_df['Bucket_7_PROTAC'] == 1) & 
                         (self.out_df['Bucket_8_PROTAC'] == 1) & 
-                        (self.out_df['PROTAC_location_Bucket'] <= 2),
+                        (self.out_df['PROTAC_location_Bucket'] <= 4),
                         'Category_PROTAC'] = 'Discovery_Opportunity_PROTAC'
         self.out_df.loc[(self.out_df['Bucket_4_PROTAC'] == 1), 'Category_PROTAC'] = 'Literature_Precedence_PROTAC'
         self.out_df.loc[(self.out_df['Top_bucket_PROTAC'] <= 3), 'Category_PROTAC'] = 'Clinical_Precedence_PROTAC'

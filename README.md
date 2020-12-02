@@ -150,11 +150,20 @@ AB category assignment rules as 'Top_Category_ab' (in descending order):
 Columns 'drug_chembl_ids_ab', 'drug_names_ab', and 'clinical_phases_ab' contain data related to clinical buckets 1-3.  
 Columns 'Uniprot_high_conf_loc', 'GO_high_conf_loc', 'Uniprot_med_conf_loc', and 'GO_med_conf_loc' contain the subcellular 
 location names and their respective evidence codes provided by the evidence source (UniProt/GO), data related to buckets 4, 5, 6 and 8.  
+Confidence for location evidence codes (provided by UniProt):  
+high_conf_evidence = 'ECO:0000269' or 'ECO:0000305'  
+medium_conf_evidence = any other type of UniProt evidence  
+(Details on UniProt evidence codes can be found here: https://www.uniprot.org/help/evidences)  
+Confidence for location evidence types (provided by GO):  
+evidence_types = {'EXP': 'High', 'IDA': 'High', 'IPI': 'High', 'TAS': 'High', 'IMP': 'High', 'IGI': 'High', 'IEP': 'High',
+'ISS': 'Medium', 'ISO': 'Medium', 'ISA': 'Medium', 'ISM': 'Medium', 'IGC': 'Medium', 'IBA': 'Medium', 'IBD': 'Medium', 'IKR': 'Medium', 'IRD': 'Medium', 'RCA': 'Medium', 'IEA': 'Medium',
+'NAS': 'Low', 'IC': 'Low', 'ND': 'Low', 'NR': 'Low'}  
+(Details on GO evidence codes can be found here: http://geneontology.org/docs/guide-go-evidence-codes/)  
 Columns 'Transmembrane' and 'Signal_peptide' contain the labels ['TRANSMEM'] (indicative for a transmembrane protein) and ['SIGNAL'] 
-(indicative for a signal peptide), provided by UniProt and related to bucket 7 assignment.
+(indicative for a signal peptide), provided by UniProt and related to bucket 7 assignment.  
 Column 'HPA_main_location' contains the main location data provided by HPA if it is labelled with "Approved", "Enhanced" or "Supported" reliability; data related to bucket 9. 
-(The complete HPA data file can be found here: 'https://www.proteinatlas.org/download/subcellular_location.tsv.zip' and 
-more on HPA Reliability scores can be found here: 'https://www.proteinatlas.org/about/assays+annotation#if_reliability_score'.)  
+(The complete HPA data file can be found here: https://www.proteinatlas.org/download/subcellular_location.tsv.zip and 
+more on HPA Reliability scores can be found here: https://www.proteinatlas.org/about/assays+annotation#if_reliability_score.)  
 
 
 #### PROTAC workflow
@@ -162,7 +171,7 @@ PROTAC category assignment rules as 'Top_Category_PROTAC' (in descending order):
 - 'Clinical_Precedence_PROTAC' is assigned if any of the clinical buckets 1-3 are positive.
 - 'Literature_Precedence_PROTAC' is assigned if literature bucket 4 is positive.
 - 'Discovery_Opportunity_PROTAC' is assigned for a given target if bucket (5 or 6) and bucket 7 and bucket 8 are assigned and 
-the PROTAC_location_Bucket annotates high or medium confidence for "good" location (location bucket score of 1 or 2).
+the PROTAC_location_Bucket annotates high or medium confidence for "good" or "grey" location (location bucket score of 1, 2, 3 or 4).
 
 Columns 'mentionned_in_PROTAC_literature', 'literature_count_PROTAC', 'pub_id', 'full_id' and 'title' relate to the fully automatic PROTAC literature 
 assessment based on abstracts from EuropePMC, indicate whether a target has been identified in PROTAC literature and provide the related evidence. 

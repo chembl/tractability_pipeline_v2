@@ -384,31 +384,41 @@ class Antibody_buckets(object):
 
         print("\t- Assessing Uniprot location (buckets 4 and 6)...")
 
-        # Return all reviewed and Human targets
-        url = "uniprot/?format=tab&query=*&fil=reviewed%3ayes+AND+organism%3a%22Homo+sapiens+(Human)+%5b9606%5d%22&columns=id,comment(SUBCELLULAR+LOCATION),comment(DOMAIN),feature(DOMAIN+EXTENT),feature(INTRAMEMBRANE),feature(TOPOLOGICAL+DOMAIN),feature(TRANSMEMBRANE),feature(SIGNAL)"
-        data = ['P42336', 'P60484']
-
-        location = self.post_request_uniprot(url, data)
-        location = [x.split('\t') for x in location.split('\n')]
-        df = pd.DataFrame(location[1:], columns=location[0])
-        df['uniprot_loc_test'] = df['Subcellular location [CC]']
-
-        df['Subcellular location [CC]'] = df['Subcellular location [CC]'].apply(self.split_loc)
-
-        df.rename(columns={'Entry': 'accession'}, inplace=True)
-
-        if self.store_fetched: 
-            df.to_csv("{}/ab_uniprot_for_buckets_4_and_6.csv".format(self.store_fetched))
-
-        df['Bucket_4_ab'], df['Uniprot_high_conf_loc'] = zip(*df.apply(self._set_b4_flag, axis=1))
-        df['Bucket_6_ab'], df['Uniprot_med_conf_loc'] = zip(*df.apply(self._set_b6_flag, axis=1))
-
-        if self.store_fetched: 
-            df.loc[:, ~df.columns.isin(['Bucket_4_ab', 'Bucket_6_ab'])].to_csv(
-                "{}/ab_uniprot_locations_processed.csv".format(self.store_fetched))
-
-        self.out_df = self.out_df.merge(df, how='left', on='accession')
-
+#        # Return all reviewed and Human targets
+#        url = "uniprot/?format=tab&query=*&fil=reviewed%3ayes+AND+organism%3a%22Homo+sapiens+(Human)+%5b9606%5d%22&columns=id,comment(SUBCELLULAR+LOCATION),comment(DOMAIN),feature(DOMAIN+EXTENT),feature(INTRAMEMBRANE),feature(TOPOLOGICAL+DOMAIN),feature(TRANSMEMBRANE),feature(SIGNAL)"
+#        data = ['P42336', 'P60484']
+#
+#        location = self.post_request_uniprot(url, data)
+#        location = [x.split('\t') for x in location.split('\n')]
+#        df = pd.DataFrame(location[1:], columns=location[0])
+#        df['uniprot_loc_test'] = df['Subcellular location [CC]']
+#
+#        df['Subcellular location [CC]'] = df['Subcellular location [CC]'].apply(self.split_loc)
+#
+#        df.rename(columns={'Entry': 'accession'}, inplace=True)
+#
+#        if self.store_fetched: 
+#            df.to_csv("{}/ab_uniprot_for_buckets_4_and_6.csv".format(self.store_fetched))
+#
+#        df['Bucket_4_ab'], df['Uniprot_high_conf_loc'] = zip(*df.apply(self._set_b4_flag, axis=1))
+#        df['Bucket_6_ab'], df['Uniprot_med_conf_loc'] = zip(*df.apply(self._set_b6_flag, axis=1))
+#
+#        if self.store_fetched: 
+#            df.loc[:, ~df.columns.isin(['Bucket_4_ab', 'Bucket_6_ab'])].to_csv(
+#                "{}/ab_uniprot_locations_processed.csv".format(self.store_fetched))
+#
+#        self.out_df = self.out_df.merge(df, how='left', on='accession')
+        
+        
+        # UniProt location data is already fetched in Pipeline setup
+        # Copy original data column for eventual later comparison
+        self.out_df['original_uniprot_location_data'] = self.out_df['Subcellular location [CC]']
+        # Process the delimited string returned from uniprot webservice call
+        self.out_df['Subcellular location [CC]'] = self.out_df['Subcellular location [CC]'].apply(self.split_loc)
+        # Assign UniProt high and medium confidence locations and buckets 4 and 6
+        self.out_df['Bucket_4_ab'], self.out_df['Uniprot_high_conf_loc'] = zip(*self.out_df.apply(self._set_b4_flag, axis=1))
+        self.out_df['Bucket_6_ab'], self.out_df['Uniprot_med_conf_loc'] = zip(*self.out_df.apply(self._set_b6_flag, axis=1))
+        
         print(self.out_df.columns)
 
 
@@ -446,7 +456,12 @@ class Antibody_buckets(object):
             cc = [cc]
 
         if not isinstance(cc, list):
-            return 0, [], 0, []
+            # If information on GO CC is provided by uniprot return as medium confidence location
+            if s['Gene ontology (cellular component)'] != '' and any(x in s['Gene ontology (cellular component)'] for x in Antibody_buckets.accepted_go_locs.keys()):
+                return 0, [], 1, [s['Gene ontology (cellular component)']]
+            else: 
+                return 0, [], 0, []
+#            return 0, [], 0, []
 
         for c_dict in cc:
             try:
@@ -668,8 +683,8 @@ class Antibody_buckets(object):
                                    'Bucket_sum_ab', 'Top_bucket_ab',
                                    'drug_chembl_ids_ab', 'drug_names_ab', 'clinical_phases_ab',
                                    'Uniprot_high_conf_loc', 'GO_high_conf_loc',
-                                   'Uniprot_med_conf_loc',
-                                   'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location'
+                                   'Uniprot_med_conf_loc', 'GO_med_conf_loc', 'Gene ontology (cellular component)', 
+                                   'Transmembrane', 'Signal_peptide', 'HPA_main_location'
                                    ]]
         # self.out_df.rename(columns={'main_location': 'HPA_main_location'}, inplace=True)
         # self.out_df.sort_values(['Clinical_Precedence', 'Discovery_Precedence', 'Predicted_Tractable'],

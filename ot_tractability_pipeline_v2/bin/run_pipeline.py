@@ -44,22 +44,22 @@ from ot_tractability_pipeline_v2.buckets_othercl import *
 DATA_PATH = pkg_resources.resource_filename('ot_tractability_pipeline_v2', 'data/')
 
 
-
 class Pipeline_setup(object):
     '''
     Information retrieved from MyGene is used in both the small molecule and antibody pipelines. This class handles
     the aggregation of data ahead of assigning targets to buckets
     '''
 
-    def __init__(self, ensembl_gene_id_list, store_fetched):
+    def __init__(self, gene_df, store_fetched):
 
         # list of ensembl IDs for targets to be considered
         self.store_fetched = store_fetched
-        self.gene_list = ensembl_gene_id_list
+        self.gene_df = gene_df
+        self.gene_list = list(gene_df['ensembl_gene_id'].unique())
+        self.human_proteome = self._get_human_proteome()
+        self.mapping = self._map_accession_to_gene_id()
+        self._merge_genes_mappings_proteome()
         self._add_MyGene_columns()
-        self._add_biomart_columns()
-#        self._add_ebi_columns()
-        self._accession_column()
         
         # # If database url not supplied, get from environemnt variable
         # if database_url is None:
@@ -79,40 +79,6 @@ class Pipeline_setup(object):
             raise
 
 
-    def _uniprot_primary_only(self, s):
-        '''
-        If multiple uniprot IDs, only take primary (assume first in list is primary)
-        :return:
-        '''
-
-        if isinstance(s, list):
-            return s[0]
-        else:
-            return s
-
-    def _add_MyGene_columns(self):
-        '''
-        Use MyGene to find uniprot accession, entrezgene  pdb, pfam, GO and interpro IDs associated to each Ensembl gene ID.
-        :return:
-        '''
-
-        mg = mygene.MyGeneInfo()
-
-        # Use MyGene to return list of Uniprot accession numbers for each ensemble gene ID
-
-        results = mg.getgenes(list(self.gene_list), scopes='ensembl',
-                              as_dataframe=True, fields='symbol,uniprot,uniprot.Swiss-Prot,uniprot.TrEMBL,ensembl.protein,entrezgene,pdb,pfam,interpro,interpro.id,go',
-                              species='human', returnall=True)
-
-        self.id_xref = results
-
-        self.id_xref['uniprot_accession'] = self.id_xref['uniprot.Swiss-Prot'].apply(self._uniprot_primary_only)
-        self.id_xref.reset_index(inplace=True)
-        # self.id_xref.rename({'_id', '_score', 'entrezgene', 'go', 'interpro', 'pdb', 'pfam','uniprot'})
-        self.id_xref.rename(columns={'query': 'ensembl_gene_id'#, 'uniprot_accession': 'accession'
-                                     }, inplace=True)
-
-
     @staticmethod
     def make_request(url, data):
         request = urllib2.Request(url)
@@ -127,85 +93,103 @@ class Pipeline_setup(object):
         return url_file.read().decode()
 
     
-    def _add_biomart_columns(self):
+    def _get_human_proteome(self):
         '''
-        Use BioMart to find uniprot accession IDs associated to each Ensembl gene ID. 
-        For more info see: https://www.ensembl.org/info/data/biomart/biomart_restful.html
-        The query is in xml format:
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE Query>
-            <Query  virtualSchemaName = "default" formatter = "TSV" header = "1" uniqueRows = "1" count = "" datasetConfigVersion = "0.6" >
-                <Dataset name = "hsapiens_gene_ensembl" interface = "default" >
-                    <Attribute name = "ensembl_gene_id" />
-                    <Attribute name = "hgnc_symbol" />
-                    <Attribute name = "uniprotswissprot" />
-                </Dataset>
-            </Query>
+        Getting the human proteome from UniProt 
+        including cross-references to other databases (NCBI GeneID, ChEMBL, BindingDB, DrugBank, PharmGKB, Pharos, PDB) and
+        location data (Subcellular location [CC], Transmembrane, Signal peptide, Gene ontology (cellular component));
+        Processing entry, gene, and protein names.
+        '''
+        print("\t- Getting human proteome data from UniProt...")
+        #full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE)'
+        full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
+
+        Uniprot_human_proteome = self.make_request(full_url, data=None)
+        Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
+        human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
+        # rename columns
+        human_proteome.rename(columns={'Entry': 'accession',
+                                       'Gene names  (primary )': 'gene_name', 
+                                       'Gene names  (synonym )': 'gene_name_synonyms'}, inplace=True)
+        # only keep row when 'Entry name' is available (discard NAN row)
+        human_proteome = human_proteome.loc[human_proteome['Entry name'].notna()]
+        # create 'symbol' column
+        human_proteome['symbol'] = human_proteome['gene_name']
+        #human_proteome[['symbol','Human']] = human_proteome['Entry name'].str.split("_",expand=True)
+        # create 'gene_name' column (using first entry in 'Gene names')
+        #human_proteome['gene_name'] = human_proteome['Gene names'].str.split(" ",expand=True)[0]
+        # create 'protein_name' column (using primary entry, before names in parentheses in 'Protein names', escaping with \\ is reqired)
+        human_proteome['protein_name'] = human_proteome['Protein names'].str.split(" \\(",expand=True)[0]
+        # save lower case protein name for future case insensitive mapping
+        human_proteome['protein_name_lower'] = human_proteome['protein_name'].str.lower()
+        # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
+        # (which should be the primary UniProtID) count: 20487
+        human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
         
+        #self.human_proteome = human_proteome
+        return human_proteome
+
+
+    def _map_accession_to_gene_id(self):
+        '''
+        Mapping UniProt accessions to Ensembl gene IDs (see https://www.uniprot.org/help/api%5Fidmapping)
+        '''
+        print("\t- Mapping UniProt accessions to Ensembl gene IDs...")
+        accession_str = ' '.join(self.human_proteome['accession'].to_list())
+        url = 'https://www.uniprot.org/uploadlists/'
+        params = {
+        'from': 'ACC+ID',
+        'to': 'ENSEMBL_ID',
+        'format': 'tab',
+        'query': accession_str
+        }
+        
+        data = urllib.urlencode(params)
+        data = data.encode('utf-8')
+        req = urllib2.Request(url, data)
+        with urllib2.urlopen(req) as f:
+           response = f.read()
+        mapping = pd.read_csv(StringIO(response.decode('utf-8')), sep='\t')
+        mapping.rename(columns={'From': 'accession', 
+                                'To': 'ensembl_gene_id'}, inplace=True)
+        return mapping
+
+        
+    def _merge_genes_mappings_proteome(self):
+        self.id_xref = self.gene_df[['ensembl_gene_id']].merge(self.mapping, how='left')
+        self.id_xref = self.id_xref.merge(self.human_proteome, how='left')
+        # keep only protein coding genes
+        self.id_xref = self.id_xref.loc[~self.id_xref['accession'].isna()]
+        
+        
+    def _add_MyGene_columns(self):
+        '''
+        Use MyGene to find uniprot accession, entrezgene, pdb, pfam, GO and interpro IDs associated to each Ensembl gene ID.
         :return:
         '''
+        print("\t- Getting data from MyGene.Info...")
+        mg = mygene.MyGeneInfo()
 
-        full_url = 'http://www.ensembl.org/biomart/martservice?query=%3C?xml%20version=%221.0%22%20encoding=%22UTF-8%22?%3E%3C!DOCTYPE%20Query%3E%3CQuery%20%20virtualSchemaName%20=%20%22default%22%20formatter%20=%20%22TSV%22%20header%20=%20%221%22%20uniqueRows%20=%20%220%22%20count%20=%20%22%22%20datasetConfigVersion%20=%20%220.6%22%20%3E%3CDataset%20name%20=%20%22hsapiens_gene_ensembl%22%20interface%20=%20%22default%22%20%3E%3CAttribute%20name%20=%20%22ensembl_gene_id%22%20/%3E%3CAttribute%20name%20=%20%22hgnc_symbol%22%20/%3E%3CAttribute%20name%20=%20%22uniprotswissprot%22%20/%3E%3C/Dataset%3E%3C/Query%3E'
-        
-        #from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets        #biomart = Antibody_buckets.make_request(full_url, data=None)
-        biomart = self.make_request(full_url, data=None)
-        biomart = [x.split('\t') for x in biomart.split('\n')]
-        biomart = pd.DataFrame(biomart[1:], columns=biomart[0])
-        biomart.rename(columns={'Gene stable ID': 'ensembl_gene_id', 
-                                'HGNC symbol': 'hgnc_symbol', 
-                                'UniProtKB/Swiss-Prot ID': 'uniprotswissprot'}, inplace=True)
-        # replace empty string with NaN
-        biomart = biomart.replace(r'^\s*$', np.NaN, regex=True)
-        # only keep row when 'uniprotswissprot' is available (discard NAN row)
-        biomart = biomart.loc[biomart['uniprotswissprot'].notna()]
-        
-        self.id_xref = biomart.merge(self.id_xref, how='right', on='ensembl_gene_id')
-        self.id_xref.drop_duplicates(['ensembl_gene_id'], inplace=True, ignore_index=True)        
+        # Use MyGene to return list of Uniprot accession numbers for each ensemble gene ID
 
-    
-    def _get_IDs_from_json(self, item):
-        return {'ensembl_gene_id': item['uniProtKBCrossReferences'][0]['properties'][1]['value'],
-                'ebi_accession': item['primaryAccession'],
-                'isoforms': "Yes" if 'isoformId' in item['uniProtKBCrossReferences'][0] else "No",
-                #'ensembl_prot_id': item['uniProtKBCrossReferences'][0]['properties'][0]['value'],
-                #'isoformId': item['uniProtKBCrossReferences'][0].get('isoformId', None),
-                }
+        mygene_results = mg.getgenes(list(self.gene_list), scopes='ensembl',
+                              as_dataframe=True, fields='symbol,uniprot,uniprot.Swiss-Prot,uniprot.TrEMBL,ensembl.protein,entrezgene,pdb,pfam,interpro,interpro.id,go',
+                              species='human', returnall=True)
 
-# =============================================================================
-#     def _add_ebi_columns(self):
-#         '''
-#         Use EBI UniProt dev API to find most recent/up-to-date uniprot accession IDs associated to each Ensembl gene ID.
-#         :return:
-#         '''
-#         
-#         requestURL = "https://wwwdev.ebi.ac.uk/uniprot/api/uniprotkb/download?fields=xref_ensembl&query=(database:ensembl)%20AND%20(organism_id:9606)&size=100000"
-#         response = requests.get(requestURL, headers={"Accept" : "application/json"})
-#         
-#         data = response.json()
-#         data = data['results']
-#         ebi_df = pd.DataFrame([self._get_IDs_from_json(item) for item in data])
-#         
-#         # keep only first (mostly primary) UniProt ID
-#         ebi_df_unique = ebi_df.drop_duplicates(['ensembl_gene_id'])
-#         
-#         self.id_xref = ebi_df_unique.merge(self.id_xref, how='right', on='ensembl_gene_id')
-#         self.id_xref.drop_duplicates(['ensembl_gene_id'], inplace=True, ignore_index=True)
-# 
-# =============================================================================
+        mygene_results.reset_index(inplace=True)
+        mygene_results.rename(columns={'query': 'ensembl_gene_id', 'symbol': 'mygene_symbol'}, inplace=True)
+        
+        self.id_xref = self.id_xref.merge(mygene_results, how='left', on='ensembl_gene_id')
 
-    def _accession_column(self):
-        '''
-        Create accession colum with values from MyGene uniprot_accession and replace missing entries 
-        with BioMart uniprotswissprot, and if still empty with ebi_accession 
-        (ebi_accession has more annotations than MyGene, but it is not always the primary one)
-        :return:
-        '''
-        self.id_xref.insert(loc=1, column='accession', value=self.id_xref['uniprot_accession'].fillna(value=self.id_xref['uniprotswissprot']))#.fillna(value=self.id_xref['ebi_accession']))
-        
-        print(self.id_xref.columns)
-        
         if self.store_fetched: 
             self.id_xref.to_csv("{}/id_xref.csv".format(self.store_fetched))
+
+        #self.id_xref.reset_index(inplace=True)
+        # self.id_xref.rename({'_id', '_score', 'entrezgene', 'go', 'interpro', 'pdb', 'pfam','uniprot'})
+        #self.id_xref['uniprot_accession'] = self.id_xref['uniprot.Swiss-Prot'].apply(self._uniprot_primary_only)
+        #self.id_xref.rename(columns={'query': 'ensembl_gene_id'#, 'uniprot_accession': 'accession'
+        #                             }, inplace=True)
+
 
 
 
@@ -268,8 +252,7 @@ def main(args=None):
 #     run(ensembl_id_list, database_url, out_file_name=args.out_file, store_fetched=store_fetched)
 # 
 # def run(ensembl_id_list, database_url, out_file_name, store_fetched):
-# =============================================================================
-    
+# =============================================================================    
 
     # Assign tractability buckets
     
@@ -320,6 +303,7 @@ def main(args=None):
     # =============================================================================
     # Combine output from different workflows to one final summary output
     # =============================================================================
+
     # try:
     # if out_buckets_sm and out_buckets_ab and out_buckets_protac and out_buckets_othercl:
     
