@@ -409,7 +409,7 @@ class Small_molecule_buckets(object):
 
     def _other_pdb(self, s):
 
-        if s in self.acc_known_lig:
+        if s in self.acc_unknown_lig:
             return list(set([p for p in self.acc_map[s] if p in self.no_ligands or p in self.bad_ligands]))
         else:
             return np.nan
@@ -424,8 +424,10 @@ class Small_molecule_buckets(object):
         # Download ligand info from pdb
         self._pdb_ligand_info()
 
-        # Accession numbers with PDB ligand
+        # Accession numbers with good PDB ligand
         self.acc_known_lig = list({c for pdb in self.good_ligands for c in self.pdb_map[pdb]})
+        # Accession numbers with PDB entry (good, bad, or no ligand)
+        self.acc_unknown_lig = list({c for pdb in (self.good_ligands + self.no_ligands + self.bad_ligands) for c in self.pdb_map[pdb]})
 
         self.out_df['PDB_Known_Ligand'] = self.out_df['accession'].apply(self._known_pdb_ligand)
         self.out_df['PDB_other'] = self.out_df['accession'].apply(self._other_pdb)

@@ -691,8 +691,15 @@ class Protac_buckets(object):
         
         self.out_df['Bucket_4_PROTAC'] = 0
         self.out_df.loc[(~self.out_df['protac_target'].isna()), 'Bucket_4_PROTAC'] = 1
-
-
+        
+        '''
+        Degradable kinome from Fischer et al 2020
+        '''
+        deg_kinome = pd.read_excel(os.path.join(DATA_PATH, 'degradable_kinome_Fischer2020_S4_mmc5.xlsx'), sheet_name='All - freq isoform collapse ')
+        self.out_df = self.out_df.merge(deg_kinome, how='left', left_on='accession', right_on='Accession')
+        self.out_df.loc[(~self.out_df['Freq.down'].isna()), 'Bucket_4_PROTAC'] = 1
+        
+        
         '''
         Mentioned in PROTAC literature (automated detection)
         '''

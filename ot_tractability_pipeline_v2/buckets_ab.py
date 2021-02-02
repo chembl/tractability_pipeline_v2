@@ -668,6 +668,11 @@ class Antibody_buckets(object):
         self.out_df = self.out_df.dropna(subset=['symbol'])
         # drop rows without accession
         self.out_df = self.out_df.dropna(subset=['accession'])
+        
+        # save processed UniProt and GO locations to id_xref
+        if self.store_fetched: 
+            self.id_xref = self.id_xref.merge(self.out_df[['accession', 'Uniprot_high_conf_loc', 'Uniprot_med_conf_loc', 'GO_high_conf_loc', 'GO_med_conf_loc']], how='left', on='accession')
+            self.id_xref.to_csv("{}/id_xref.csv".format(self.store_fetched))
 
         # Columns to keep
         self.out_df = self.out_df[['symbol', 'accession',
