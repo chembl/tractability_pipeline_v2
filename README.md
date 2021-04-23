@@ -16,9 +16,47 @@ Information is provided for different potential drug modalities, which are subdi
 - clinical evidence for other modalities ("Bucket_*X*_othercl")
 
 **Output format**  
-The pipeline has two main outputs: 
-1) a **TSV** file (table) with one target per row and bucket data as columns, 
-2) a **JSON** data structure (generated from the table output) with a hierarchical/nested data structure, relating the evidence to the buckets:  
+The pipeline has one main output:
+- a **TSV** file (table) with one target per row and bucket data as columns.
+
+The column names of tractability buckets are replaced with more descriptive names prior to saving the output file:
+
+  'Bucket_1_sm':'SM_B1_Approved Drug',  
+  'Bucket_2_sm':'SM_B2_Advanced Clinical',  
+  'Bucket_3_sm':'SM_B3_Phase 1 Clinical',  
+  'Bucket_4_sm':'SM_B4_Structure with Ligand',  
+  'Bucket_5_sm':'SM_B5_High-Quality Ligand',  
+  'Bucket_6_sm':'SM_B6_High-Quality Pocket',  
+  'Bucket_7_sm':'SM_B7_Med-Quality Pocket',  
+  'Bucket_8_sm':'SM_B8_Druggable Family',  
+  
+  'Bucket_1_ab':'AB_B1_Approved Drug',  
+  'Bucket_2_ab':'AB_B2_Advanced Clinical',  
+  'Bucket_3_ab':'AB_B3_Phase 1 Clinical',  
+  'Bucket_4_ab':'AB_B4_UniProt loc high conf',  
+  'Bucket_5_ab':'AB_B5_GO CC high conf',  
+  'Bucket_6_ab':'AB_B6_UniProt loc med conf',  
+  'Bucket_7_ab':'AB_B7_UniProt SigP or TMHMM',  
+  'Bucket_8_ab':'AB_B8_GO CC med conf',  
+  'Bucket_9_ab':'AB_B9_Human Protein Atlas loc',  
+  
+  'Bucket_1_PROTAC':'PR_B1_Approved Drug',  
+  'Bucket_2_PROTAC':'PR_B2_Advanced Clinical',  
+  'Bucket_3_PROTAC':'PR_B3_Phase 1 Clinical',  
+  'Bucket_4_PROTAC':'PR_B4_Literature',  
+  'Bucket_5_PROTAC':'PR_B5_UniProt Ubiquitination',  
+  'Bucket_6_PROTAC':'PR_B6_Database Ubiquitination',  
+  'Bucket_7_PROTAC':'PR_B7_Half-life Data',  
+  'Bucket_8_PROTAC':'PR_B8_Small Molecule Binder',  
+  'PROTAC_location_Bucket':'PR_locB_Location Score',  
+  
+  'Bucket_1_othercl':'OC_B1_Approved Drug',  
+  'Bucket_2_othercl':'OC_B2_Advanced Clinical',  
+  'Bucket_3_othercl':'OC_B3_Phase 1 Clinical'  
+
+
+It is possible to activate a second output format by uncommenting the respective lines in run_pipeline.py):  
+- a **JSON** data structure (generated from the table output) with a hierarchical/nested data structure, relating the evidence to the buckets:  
     {"ensembl_gene_id":{...}, {$modality: {'Bucket_scores':{...}, 'Bucket_evaluation':{...}, 'Category_scores':{...}, 'Category_evaluation':{...}, 'Bucket_evidences':{...}}}}  
 
 Additionaly the data fetched during execution is saved into a 'fetched data' folder (default).
@@ -35,9 +73,9 @@ Set the following environment variables:
 
 `CHEMBL_DB=oracle://address:to@local.chembl` 
 
-`CHEMBL_VERSION=27`
+`CHEMBL_VERSION=28`
 
-! The current pipeline works with the most recent ChEMBL version 27, and version 26 (but not older ones) !
+! The current pipeline works with ChEMBL version 26 and more recent versions (but not older ones) !
 
 
 
@@ -173,7 +211,7 @@ PROTAC category assignment rules as 'Top_Category_PROTAC' (in descending order):
 - 'Discovery_Opportunity_PROTAC' is assigned for a given target if bucket (5 or 6) and bucket 7 and bucket 8 are assigned and 
 the PROTAC_location_Bucket annotates high or medium confidence for "good" or "grey" location (location bucket score of 1, 2, 3 or 4).
 
-Columns 'mentionned_in_PROTAC_literature', 'literature_count_PROTAC', 'pub_id', 'full_id' and 'title' relate to the fully automatic PROTAC literature 
+Columns 'mentioned_in_PROTAC_literature', 'literature_count_PROTAC', 'pub_id', 'full_id' and 'title' relate to the fully automatic PROTAC literature 
 assessment based on abstracts from EuropePMC, indicate whether a target has been identified in PROTAC literature and provide the related evidence. 
 This data is not represented by a bucket.  
 Column 'Uniprot_keyword' indicates whether a target has the keyword: "Ubl conjugation [KW-0832]" annotated in UniProt and relates to bucket 5

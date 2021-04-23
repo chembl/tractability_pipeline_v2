@@ -367,16 +367,74 @@ def main(args=None):
 
     # drop rows without gene symbol
     out_buckets = out_buckets.dropna(subset=['symbol'])
+    # drop rows without accession
+    out_buckets = out_buckets.dropna(subset=['accession'])
     # drop duplicated accessions
     out_buckets = out_buckets.drop_duplicates(subset="accession", keep='first')
+
+# =============================================================================
+#     # =========================================================================
+#     # Transforming output DataFrame into json format
+#     # =========================================================================
+#     if args.workflows_to_run == 'all':
+# 
+#         with open("./tractability_buckets_{}.json".format(d),"w") as h:
+#             for idx,r in out_buckets.iterrows():
+#                 gene = {"ensembl_gene_id":r['ensembl_gene_id']}
+#                 gene["SM"] = sm.sm2json(r)
+#                 gene["AB"] = ab.ab2json(r)
+#                 gene["PROTAC"] = protac.protac2json(r)
+#                 gene["othercl"] = othercl.othercl2json(r)
+#                 json.dump(gene, h)
+#     
+# 
+#         print("\t- as json in './tractability_buckets_{}.json'.\
+#                   \n".format(d), sep='\t')
+# 
+# =============================================================================
+   
+    # renaming columns
+    try:
+        out_buckets = out_buckets.rename(columns = {'Bucket_1_sm':'SM_B1_Approved Drug',
+                                              'Bucket_2_sm':'SM_B2_Advanced Clinical',
+                                              'Bucket_3_sm':'SM_B3_Phase 1 Clinical',
+                                              'Bucket_4_sm':'SM_B4_Structure with Ligand',
+                                              'Bucket_5_sm':'SM_B5_High-Quality Ligand',
+                                              'Bucket_6_sm':'SM_B6_High-Quality Pocket',
+                                              'Bucket_7_sm':'SM_B7_Med-Quality Pocket',
+                                              'Bucket_8_sm':'SM_B8_Druggable Family',
+                                              
+                                              'Bucket_1_ab':'AB_B1_Approved Drug',
+                                              'Bucket_2_ab':'AB_B2_Advanced Clinical',
+                                              'Bucket_3_ab':'AB_B3_Phase 1 Clinical',
+                                              'Bucket_4_ab':'AB_B4_UniProt loc high conf',
+                                              'Bucket_5_ab':'AB_B5_GO CC high conf',
+                                              'Bucket_6_ab':'AB_B6_UniProt loc med conf',
+                                              'Bucket_7_ab':'AB_B7_UniProt SigP or TMHMM',
+                                              'Bucket_8_ab':'AB_B8_GO CC med conf',
+                                              'Bucket_9_ab':'AB_B9_Human Protein Atlas loc',
+                                              
+                                              'Bucket_1_PROTAC':'PR_B1_Approved Drug',
+                                              'Bucket_2_PROTAC':'PR_B2_Advanced Clinical',
+                                              'Bucket_3_PROTAC':'PR_B3_Phase 1 Clinical',
+                                              'Bucket_4_PROTAC':'PR_B4_Literature',
+                                              'Bucket_5_PROTAC':'PR_B5_UniProt Ubiquitination',
+                                              'Bucket_6_PROTAC':'PR_B6_Database Ubiquitination',
+                                              'Bucket_7_PROTAC':'PR_B7_Half-life Data',
+                                              'Bucket_8_PROTAC':'PR_B8_Small Molecule Binder',
+                                              'PROTAC_location_Bucket':'PR_locB_Location Score',
+                                              
+                                              'Bucket_1_othercl':'OC_B1_Approved Drug',
+                                              'Bucket_2_othercl':'OC_B2_Advanced Clinical',
+                                              'Bucket_3_othercl':'OC_B3_Phase 1 Clinical'
+                                             }) #, inplace = True
+    except:
+        print("Columns could not be renamed.")
     
     # save final output to tsv
     out_buckets.to_csv('tractability_buckets_{}.tsv'.format(d), sep='\t', index=False)
     if store_fetched:
         out_buckets.to_csv('{}/tractability_buckets_{}.tsv'.format(store_fetched,d), sep='\t', index=False)
-
-    # drop entries without UniProt 'accession'
-    out_buckets = out_buckets.dropna(subset=['accession']) #, inplace=True
 
     # reduced output omitting targets missing all buckets (in all workflows)
     #out_buckets_filled = out_buckets[(out_buckets['Top_bucket_sm'] < 10) | (out_buckets['Top_bucket_ab'] < 10) | (out_buckets['Top_bucket_PROTAC'] < 10) | (out_buckets['Top_bucket_othercl'] < 10)]
@@ -384,26 +442,6 @@ def main(args=None):
 
     print("\nThe results from all workflows are concatenated and saved\
           \n\t- as table in './tractability_buckets_{}.tsv'".format(d), sep='\t')
-
-    # =========================================================================
-    # Transforming output DataFrame into json format
-    # =========================================================================
-    if args.workflows_to_run == 'all':
-
-        with open("./tractability_buckets_{}.json".format(d),"w") as h:
-            for idx,r in out_buckets.iterrows():
-                gene = {"ensembl_gene_id":r['ensembl_gene_id']}
-                gene["SM"] = sm.sm2json(r)
-                gene["AB"] = ab.ab2json(r)
-                gene["PROTAC"] = protac.protac2json(r)
-                gene["othercl"] = othercl.othercl2json(r)
-                json.dump(gene, h)
-    
-
-        print("\t- as json in './tractability_buckets_{}.json'.\
-                  \n".format(d), sep='\t')
-
-                 
 
 
 if __name__ == '__main__':

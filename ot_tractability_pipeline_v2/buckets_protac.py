@@ -430,9 +430,15 @@ class Protac_buckets(object):
         self.out_df['Bucket_3_PROTAC'] = 0
 
         # AR PROTAC ARV-110 is currently in clinical trials for metastatic castration-resistant prostate cancer. 
-        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000169083'), 'Bucket_3_PROTAC'] = 1
+        #self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000169083'), 'Bucket_3_PROTAC'] = 1
+        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000169083'), 'Bucket_2_PROTAC'] = 1
         # ER PROTAC ARV-471 is currently in clinical trials for advanced or metastatic ER+/Her2− breast cancer. 
-        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000091831'), 'Bucket_3_PROTAC'] = 1
+        #self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000091831'), 'Bucket_3_PROTAC'] = 1
+        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000091831'), 'Bucket_2_PROTAC'] = 1
+        # IRAK4 PROTAC KT-474 is currently in clinical trials for the treatment of interleukin-1 receptor (IL-1R)/toll-like receptor (TLR)-driven immune-inflammatory diseases.
+        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000198001'), 'Bucket_3_PROTAC'] = 1
+        # Bruton’s tyrosine kinase (BTK) PROTAC NX-2127 is currently in clinical trials for the treatment of relapsed or refractory B-cell malignancies.
+        self.out_df.loc[(self.out_df['ensembl_gene_id'] == 'ENSG00000010671'), 'Bucket_3_PROTAC'] = 1
 
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
@@ -696,7 +702,8 @@ class Protac_buckets(object):
         Degradable kinome from Fischer et al 2020
         '''
         deg_kinome = pd.read_excel(os.path.join(DATA_PATH, 'degradable_kinome_Fischer2020_S4_mmc5.xlsx'), sheet_name='All - freq isoform collapse ')
-        self.out_df = self.out_df.merge(deg_kinome, how='left', left_on='accession', right_on='Accession')
+        #self.out_df = self.out_df.merge(deg_kinome, how='left', left_on='accession', right_on='Accession')
+        self.out_df = self.out_df.merge(deg_kinome, how='left', left_on='symbol', right_on='ID')
         self.out_df.loc[(~self.out_df['Freq.down'].isna()), 'Bucket_4_PROTAC'] = 1
         
         
@@ -784,8 +791,8 @@ class Protac_buckets(object):
 
         self.out_df = self.out_df.merge(tagged_targets_df_grouped, how='left', on='accession')
         
-        self.out_df['mentionned_in_PROTAC_literature'] = 0
-        self.out_df.loc[(~self.out_df['full_id'].isna()), 'mentionned_in_PROTAC_literature'] = 1
+        self.out_df['mentioned_in_PROTAC_literature'] = 0
+        self.out_df.loc[(~self.out_df['full_id'].isna()), 'mentioned_in_PROTAC_literature'] = 1
         
         # count literature per target and append as column
         self.out_df['literature_count_PROTAC'] = [len(x) for x in ast.literal_eval(",".join(self.out_df['full_id'].fillna("['']",inplace=False).astype(str).replace(to_replace="['']",value="''",inplace=False)))]
@@ -798,7 +805,7 @@ class Protac_buckets(object):
         
         # save additional evaluation results
         if self.store_fetched: 
-            literature_evidence = self.out_df.loc[self.out_df['mentionned_in_PROTAC_literature'] == 1]
+            literature_evidence = self.out_df.loc[self.out_df['mentioned_in_PROTAC_literature'] == 1]
             literature_evidence = literature_evidence[['accession','symbol','protein_name','literature_count_PROTAC','title','full_id',
                                  'abstractText', 'NER_PROTAC_label']].sort_values(
                     by=['literature_count_PROTAC'],ascending=[0]) # ,'sentences','sentence_count','tag_in_sentence_count'
@@ -1170,7 +1177,7 @@ class Protac_buckets(object):
                                    'Bucket_sum_PROTAC', 'Top_bucket_PROTAC',
                                    'PROTAC_location_Bucket',
                                    # 'drug_chembl_ids_PROTAC', 'drug_names_PROTAC',
-                                   'mentionned_in_PROTAC_literature', 'literature_count_PROTAC', 'pub_id', 'full_id', 'title', 
+                                   'mentioned_in_PROTAC_literature', 'literature_count_PROTAC', 'pub_id', 'full_id', 'title', 
                                    'Max_halflife', 'Min_halflife',
                                    'Uniprot_keyword', 'Uniprot_PTM', 'Uniprot_CrossLink', 
                                    'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013', 'number_of_ubiquitination_sites', 

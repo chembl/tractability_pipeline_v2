@@ -198,6 +198,10 @@ class Antibody_buckets(object):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
             return ",".join([y for y in x if isinstance(y,str) and y])
 
+        def set_strings2(x):
+            ''' concatenate in string and include only if it is a string (not nan), and exists '''
+            return " | ".join([y for y in x if isinstance(y,str) and y])
+
         # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
         self.all_chembl_targets['clinical_phase'] = self.all_chembl_targets['max_phase'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
 
@@ -206,7 +210,7 @@ class Antibody_buckets(object):
         f['max_phase_for_ind'] = 'max'
         f['max_phase'] = 'max'
         f['drug_chembl_id'] = set_strings
-        f['drug_name'] = set_strings
+        f['drug_name'] = set_strings2
         f['clinical_phase'] = set_strings
 
         self.all_chembl_targets = self.all_chembl_targets.groupby('accession', as_index=False).agg(f)
@@ -716,14 +720,14 @@ class Antibody_buckets(object):
         self.out_df['drug_names_ab'].fillna('', inplace=True)
         self.out_df['clinical_phases_ab'].fillna('', inplace=True)
 
-        # create dictionaries from 'drug_chembl_ids_sm' and 'clinical_phases_sm'/'drug_names_sm'
-        self.out_df['drug_names_dict_ab'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_ab'].split(","), row['drug_names_ab'].split(","))), axis=1)
+        # create dictionaries from 'drug_chembl_ids_ab' and 'clinical_phases_sm'/'drug_names_ab'
+        self.out_df['drug_names_dict_ab'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_ab'].split(","), row['drug_names_ab'].split(" | "))), axis=1)
         self.out_df['clinical_phases_dict_ab'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_ab'].split(","), row['clinical_phases_ab'].split(","))), axis=1)
 
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
         self.out_df['drug_chembl_ids_ab'] = self.out_df['drug_chembl_ids_ab'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        self.out_df['drug_names_ab'] = self.out_df['drug_names_ab'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        self.out_df['drug_names_ab'] = self.out_df['drug_names_ab'].apply(lambda x: list(dict.fromkeys(x.split(" | "))))
 
         print(self.out_df.columns)
 

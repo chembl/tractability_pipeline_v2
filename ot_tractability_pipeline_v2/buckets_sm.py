@@ -215,6 +215,10 @@ class Small_molecule_buckets(object):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
             return ",".join([y for y in x if isinstance(y,str) and y])
 
+        def set_strings2(x):
+            ''' concatenate in string and include only if it is a string (not nan), and exists '''
+            return " | ".join([y for y in x if isinstance(y,str) and y])
+
         #print(self.id_xref['symbol'])
         self._search_chembl_clinical()
         self._process_protein_complexes()
@@ -257,7 +261,7 @@ class Small_molecule_buckets(object):
         f['pref_name'] = set_as_tuple
         f['moa_chembl'] = set_as_tuple
         f['drug_chembl_id'] = set_strings
-        f['drug_name'] = set_strings
+        f['drug_name'] = set_strings2
         f['clinical_phase'] = set_strings
 
         self.out_df = self.out_df.groupby(['ensembl_gene_id'], as_index=False).agg(f)#.reset_index(drop=True)
@@ -707,13 +711,13 @@ class Small_molecule_buckets(object):
         self.out_df['clinical_phases_sm'].fillna('', inplace=True)
 
         # create dictionaries from 'drug_chembl_ids_sm' and 'clinical_phases_sm'/'drug_names_sm'
-        self.out_df['drug_names_dict_sm'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_sm'].split(","), row['drug_names_sm'].split(","))), axis=1)
+        self.out_df['drug_names_dict_sm'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_sm'].split(","), row['drug_names_sm'].split(" | "))), axis=1)
         self.out_df['clinical_phases_dict_sm'] = self.out_df.apply(lambda row : dict(zip(row['drug_chembl_ids_sm'].split(","), row['clinical_phases_sm'].split(","))), axis=1)
         
         # Cleaning column: setting selected culumns in list format to improve visualization e.g. with Excel
         # and remove duplicates while keeping order using "list(dict.fromkeys(lst))"
         self.out_df['drug_chembl_ids_sm'] = self.out_df['drug_chembl_ids_sm'].apply(lambda x: list(dict.fromkeys(x.split(","))))
-        self.out_df['drug_names_sm'] = self.out_df['drug_names_sm'].apply(lambda x: list(dict.fromkeys(x.split(","))))
+        self.out_df['drug_names_sm'] = self.out_df['drug_names_sm'].apply(lambda x: list(dict.fromkeys(x.split(" | "))))
        
         print(self.out_df.columns)
 
