@@ -223,7 +223,9 @@ class Small_molecule_buckets(object):
         self._search_chembl_clinical()
         self._process_protein_complexes()
 
-        self.gene_xref = self.id_xref[['accession', 'ensembl_gene_id', 'symbol']]
+        self.gene_xref = self.id_xref[['accession', 'ensembl_gene_id', 'symbol', 'Entry name', 'Protein names', 
+                                       'IDG_family', 'IDG_dtoclass', 'IDG_tdl', 'IDG_fam',
+                                       'GO_BioProcess', 'GO_MolFunction']]
 
         self.clinical_evidence = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
 #        self.out_df = self.all_chembl_targets.merge(self.gene_xref, how='outer', on='accession')
@@ -249,7 +251,9 @@ class Small_molecule_buckets(object):
 #                                                                 ], as_index=False).agg(f0).replace({'drug_chembl_id':{'tmp': np.nan}})
         self.clinical_evidence = self.clinical_evidence.groupby(['ensembl_gene_id', 'drug_chembl_id'], as_index=False).agg(f0)
 
-        self.out_df = self.gene_xref.merge(self.clinical_evidence.drop(['accession', 'symbol'], axis=1), how='outer', on='ensembl_gene_id')
+        self.out_df = self.gene_xref.merge(self.clinical_evidence.drop(['accession', 'symbol', 'Entry name', 'Protein names', 
+                                                                        'IDG_family', 'IDG_dtoclass', 'IDG_tdl', 'IDG_fam',
+                                                                        'GO_BioProcess', 'GO_MolFunction'], axis=1), how='outer', on='ensembl_gene_id')
 
         # copy 'max_phase' column to 'clinical_phase', but first convert to integer (from float), then to string and replace string nan by real nan (that it can correctly be detected during aggregation)
         self.out_df['clinical_phase'] = self.out_df['max_phase'].fillna(-1).astype(int).astype(str).replace('-1',np.nan)
@@ -678,7 +682,9 @@ class Small_molecule_buckets(object):
         print(self.out_df.columns)
         
         # Add extra buckets to the list below
-        self.out_df = self.out_df[['symbol', 'accession',
+        self.out_df = self.out_df[['symbol', 'accession', 'Entry name', 'Protein names', 
+                                   'IDG_family', 'IDG_dtoclass', 'IDG_tdl', 'IDG_fam',
+                                   'GO_BioProcess', 'GO_MolFunction',
                                    'Bucket_1_sm', 'Bucket_2_sm', 'Bucket_3_sm', 
                                    'Bucket_4_sm', 'Bucket_5_sm', 'Bucket_6_sm', 
                                    'Bucket_7_sm', 'Bucket_8_sm', 

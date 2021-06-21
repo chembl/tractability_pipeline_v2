@@ -147,7 +147,13 @@ Bucket 3 (ChEMBL) Targets with drug (other than SM or AB) in clinical phase 1
 
 ## Provided data besides bucket assignments
 
-In the primary TSV output there are several columns following the bucket columns providing additional data, which can be exploited by the user.  
+In the primary TSV output the first columns provide general target information. 
+This includes Ensembl gene ID and gene symbol, UniProt ID, Entry name and Protein names, 
+information from the Illuminating the Druggable Genome (IDG) project with 'IDG_family' (family adherence), 
+'IDG_dtoclass' (Drug Target Ontology class), 'IDG_tdl' (Target Development Level), and 'IDG_fam' (global IDG family classification), 
+as well as GO Biological Process and Molecular Function terms.
+
+There are also several columns following the bucket columns providing additional data, which can be exploited by the user.  
 
 All workflows (*W*) have two bucket summary columns:  
 'Bucket_sum_*W*' = sum of assessments for all binary buckets  

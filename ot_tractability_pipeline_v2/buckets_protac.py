@@ -1170,7 +1170,6 @@ class Protac_buckets(object):
                                    # 'Uniprot_high_conf_loc', 'GO_high_conf_loc',
                                    # 'Uniprot_med_conf_loc',
                                    # 'GO_med_conf_loc', 'Transmembrane', 'Signal_peptide', 'HPA_main_location',
-                                   'protein_name', 
                                    'Bucket_1_PROTAC', 'Bucket_2_PROTAC', 'Bucket_3_PROTAC', 
                                    'Bucket_4_PROTAC', 'Bucket_5_PROTAC', 'Bucket_6_PROTAC', 
                                    'Bucket_7_PROTAC', 'Bucket_8_PROTAC', #'Bucket_9_PROTAC', 

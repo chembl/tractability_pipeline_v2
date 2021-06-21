@@ -14,14 +14,15 @@ import sys
 import argparse
 import datetime
 import os
-
-import mygene
 import numpy as np
 import pandas as pd
+import mygene
 import pkg_resources
 from sqlalchemy import create_engine
 import json
 import requests
+import ast
+import mysql.connector as sql
 
 PY3 = sys.version > '3'
 if PY3:
@@ -60,6 +61,16 @@ class Pipeline_setup(object):
         self.mapping = self._map_accession_to_gene_id()
         self._merge_genes_mappings_proteome()
         self._add_MyGene_columns()
+        self._add_IDG_info()
+
+        if self.store_fetched: 
+            self.id_xref.to_csv("{}/id_xref.csv".format(self.store_fetched))
+
+        #self.id_xref.reset_index(inplace=True)
+        # self.id_xref.rename({'_id', '_score', 'entrezgene', 'go', 'interpro', 'pdb', 'pfam','uniprot'})
+        #self.id_xref['uniprot_accession'] = self.id_xref['uniprot.Swiss-Prot'].apply(self._uniprot_primary_only)
+        #self.id_xref.rename(columns={'query': 'ensembl_gene_id'#, 'uniprot_accession': 'accession'
+        #                             }, inplace=True)
         
         # # If database url not supplied, get from environemnt variable
         # if database_url is None:
@@ -162,6 +173,30 @@ class Pipeline_setup(object):
         self.id_xref = self.id_xref.loc[~self.id_xref['accession'].isna()]
         
         
+    @staticmethod
+    def extract_terms(dfcolumn):
+        '''
+        Extract GO terms from column returned by MyGene query.
+        '''
+        go_terms_list = []
+        try:
+            terms = dfcolumn
+            #terms = ast.literal_eval(terms)
+        except:
+            return []
+        if isinstance(terms, float):
+            return []
+        if isinstance(terms, dict):
+            terms = [terms]
+        for terms_dict in terms:
+            try:
+                go_terms = terms_dict['term']
+                go_terms_list.append(go_terms)
+            except TypeError:
+                continue
+        return go_terms_list
+
+        
     def _add_MyGene_columns(self):
         '''
         Use MyGene to find uniprot accession, entrezgene, pdb, pfam, GO and interpro IDs associated to each Ensembl gene ID.
@@ -181,14 +216,46 @@ class Pipeline_setup(object):
         
         self.id_xref = self.id_xref.merge(mygene_results, how='left', on='ensembl_gene_id')
 
-        if self.store_fetched: 
-            self.id_xref.to_csv("{}/id_xref.csv".format(self.store_fetched))
-
-        #self.id_xref.reset_index(inplace=True)
-        # self.id_xref.rename({'_id', '_score', 'entrezgene', 'go', 'interpro', 'pdb', 'pfam','uniprot'})
-        #self.id_xref['uniprot_accession'] = self.id_xref['uniprot.Swiss-Prot'].apply(self._uniprot_primary_only)
-        #self.id_xref.rename(columns={'query': 'ensembl_gene_id'#, 'uniprot_accession': 'accession'
-        #                             }, inplace=True)
+        # fix missing data in aggregated go columns (When there is only one entry for BP/CC/MF, the aggregated go.BP/CC/MF column is NAN, but the data is available in the seperate respective columns and thus fetched from there.)
+        self.id_xref['go.BP'].fillna("[{'evidence': '"+self.id_xref['go.BP.evidence']+"', 'gocategory': '"+self.id_xref['go.BP.gocategory']+"', 'id': '"+self.id_xref['go.BP.id']+"', 'qualifier': '"+self.id_xref['go.BP.qualifier']+"', 'term': '"+self.id_xref['go.BP.term']+"'}]", inplace=True)
+        self.id_xref['go.CC'].fillna("[{'evidence': '"+self.id_xref['go.CC.evidence']+"', 'gocategory': '"+self.id_xref['go.CC.gocategory']+"', 'id': '"+self.id_xref['go.CC.id']+"', 'qualifier': '"+self.id_xref['go.CC.qualifier']+"', 'term': '"+self.id_xref['go.CC.term']+"'}]", inplace=True)
+        self.id_xref['go.MF'].fillna("[{'category': '"+self.id_xref['go.MF.category']+"', 'evidence': '"+self.id_xref['go.MF.evidence']+"', 'id': '"+self.id_xref['go.MF.id']+"', 'qualifier': '"+self.id_xref['go.MF.qualifier']+"', 'term': '"+self.id_xref['go.MF.term']+"'}]", inplace=True)
+        
+        self.id_xref['GO_BioProcess'] = self.id_xref['go.BP'].apply(self.extract_terms)
+        self.id_xref['GO_MolFunction'] = self.id_xref['go.MF'].apply(self.extract_terms)
+        
+        
+    def _add_IDG_info(self):
+        '''
+        Add information from Illuminating the Druggable Genome (IDG) project - Pharos/TCRD: protein family classification and Target Development Levels (TDLs)
+        '''
+        print("\t- Getting data from IDG/TCRD version 6.11.0...")
+        # For latest database version check http://juniper.health.unm.edu/tcrd/
+        db_connection = sql.connect(host='tcrd.kmc.io', db='tcrd6110', user='tcrd')
+        # Read in everything from the protein table
+        query1 = "SELECT id, name, description, uniprot, sym, family ,dtoclass \
+                 FROM protein"
+        protein = pd.read_sql(query1, con=db_connection)
+        # Read in info from the target table
+        query2 = "SELECT id, name, ttype, tdl, fam \
+                 FROM target" # \ WHERE tdl='Tclin' OR tdl='Tchem'"
+        target = pd.read_sql(query2, con=db_connection)
+        # Closing the connection
+        db_connection.close()
+        # Joining the Target and Protein Data Frames on internal id
+        protein = protein.set_index("id")
+        target = target.set_index("id")
+        # Concatenate protein and target dataframes (excluding column 'name' from target):
+        result = pd.concat([protein, target.drop('name', axis=1)], axis=1, join='outer')
+        result.drop_duplicates(subset="uniprot", keep='first', inplace=True)
+        # added columns are: name, description, uniprot, sym	, family	, dtoclass, 	ttype, tdl, 	fam
+        result.rename(columns={'family': 'IDG_family', 
+                               'dtoclass': 'IDG_dtoclass', 
+                               'ttype': 'IDG_ttype', 
+                               'tdl': 'IDG_tdl', 
+                               'fam': 'IDG_fam'}, inplace=True)
+        # Merge IDG results with self.id_xref
+        self.id_xref = self.id_xref.merge(result, how='left', left_on='accession', right_on='uniprot')
 
 
 
@@ -234,6 +301,13 @@ def main(args=None):
     # If database url not supplied, get from environemnt variable
     if database_url is None:
         database_url = os.getenv('CHEMBL_DB')
+    print("Using ChEMBL database at {}".format(database_url))
+
+    # check workflows_to_run 
+    if args.workflows_to_run not in ['all','sm_ab_othercl','sm_protac_othercl','sm_othercl']:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+    else: print("Workflows to be run are: {}".format(args.workflows_to_run))
     
     # create external data folder
     if args.store_fetched_data == True:
@@ -241,12 +315,8 @@ def main(args=None):
         fn = "./fetched data {}".format(ts)
         os.mkdir(fn)
         store_fetched = fn
+        print("Additional data will be saved to {}".format(store_fetched))
     else: store_fetched = False 
-
-    # check workflows_to_run 
-    if args.workflows_to_run not in ['all','sm_ab_othercl','sm_protac_othercl','sm_othercl']:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
     
 # =============================================================================
 #     run(ensembl_id_list, database_url, out_file_name=args.out_file, store_fetched=store_fetched)
