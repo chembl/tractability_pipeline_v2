@@ -6,6 +6,7 @@ import os
 try:
     chembl_number = int(os.getenv('CHEMBL_VERSION'))
     CHEMBL_VERSION = "CHEMBL_{}".format(chembl_number)
+    print("\t  ChEMBL version in use is "+CHEMBL_VERSION)
 except TypeError:
     print('''
     Please set the CHEMBL version '''

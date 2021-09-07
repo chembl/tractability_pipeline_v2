@@ -14,14 +14,14 @@ Created on Mon Feb  3 10:38:51 2020
 # import zipfile
 # import argparse
 # import datetime
-# import os
+import os
 import sys
 
 # import mygene
 import numpy as np
 import pandas as pd
 import pkg_resources
-# from sqlalchemy import create_engine
+from sqlalchemy import create_engine
 
 PY3 = sys.version > '3'
 if PY3:
@@ -58,7 +58,11 @@ class Othercl_buckets(object):
         self.id_xref = Pipeline_setup.id_xref
 
         # ChEMBL DB connection
-        self.engine = Pipeline_setup.engine
+        #self.engine = Pipeline_setup.engine
+        if database_url is None:
+            database_url = os.getenv('CHEMBL_DB')
+        # ChEMBL DB connection - reestablish connection to avoid timeout
+        self.engine = create_engine(database_url)
 
         # All chembl data loaded into here
         self.all_chembl_targets = None

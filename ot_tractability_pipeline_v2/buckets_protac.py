@@ -16,13 +16,15 @@ import json
 import sys
 import time
 import os
-
+from sqlalchemy import create_engine # to re-establish connection
 # import mygene
 import numpy as np
 import pandas as pd
 import pkg_resources
 import ast
 # from sqlalchemy import create_engine
+
+import requests
 
 PY3 = sys.version > '3'
 if PY3:
@@ -462,14 +464,19 @@ class Protac_buckets(object):
         # keyword search only in Abstract (keywords in "" need additional 'ABSTRACT:'): 
         # ABSTRACT:((ABSTRACT:"proteolysis targeting chimera" OR ABSTRACT:"proteolysis targeting chimeric") OR ((PROTAC OR SNIPER) AND (degradation OR degrade OR proteolysis)) OR (degrader AND (proteasome OR ubiquitin)))
         # use resultType=core& before query to get full abstract text in return
-        url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?resultType=core&query=ABSTRACT%3A%28%28ABSTRACT%3A%22proteolysis%20targeting%20chimera%22%20OR%20ABSTRACT%3A%22proteolysis%20targeting%20chimeric%22%29%20OR%20%28%28PROTAC%20OR%20SNIPER%29%20AND%20%28degradation%20OR%20degrade%20OR%20proteolysis%29%29%20OR%20%28degrader%20AND%20%28proteasome%20OR%20ubiquitin%29%29%29&resultType=lite&cursorMark=*&pageSize=1000&format=json")
         # ABSTRACT:((ABSTRACT:"proteolysis targeting chimera" OR ABSTRACT:"proteolysis targeting chimeric") OR (PROTAC AND (degradation OR degrade OR ubiquitin OR proteolysis)))
-        #url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?resultType=core&query=ABSTRACT%3A%28%28ABSTRACT%3A%22proteolysis%20targeting%20chimera%22%20OR%20ABSTRACT%3A%22proteolysis%20targeting%20chimeric%22%29%20OR%20%28PROTAC%20AND%20%28degradation%20OR%20degrade%20OR%20ubiquitin%20OR%20proteolysis%29%29%29&resultType=lite&cursorMark=*&pageSize=1000&format=json")
-        #url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=%22proteolysis%20targeting%20chimera%22&resultType=lite&cursorMark=*&pageSize=1000&format=json")
+        #url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search?resultType=core&query=ABSTRACT%3A%28%28ABSTRACT%3A%22proteolysis%20targeting%20chimera%22%20OR%20ABSTRACT%3A%22proteolysis%20targeting%20chimeric%22%29%20OR%20%28PROTAC%20AND%20%28degradation%20OR%20degrade%20OR%20ubiquitin%20OR%20proteolysis%29%29%29&resultType=lite&cursorMark=*&pageSize=1000&format=json"
     
-        data = url.read()
-        try: data = json.loads(data.decode())
-        except UnicodeDecodeError: data = json.loads(data)
+        # urllib not working returning 404 page error -> replaced by requests
+        #url = urllib2.urlopen("https://www.ebi.ac.uk/europepmc/webservices/rest/search?resultType=core&query=ABSTRACT%3A%28%28ABSTRACT%3A%22proteolysis%20targeting%20chimera%22%20OR%20ABSTRACT%3A%22proteolysis%20targeting%20chimeric%22%29%20OR%20%28%28PROTAC%20OR%20SNIPER%29%20AND%20%28degradation%20OR%20degrade%20OR%20proteolysis%29%29%20OR%20%28degrader%20AND%20%28proteasome%20OR%20ubiquitin%29%29%29&resultType=lite&cursorMark=*&pageSize=1000&format=json")
+        #data = url.read()
+        #try: data = json.loads(data.decode())
+        #except UnicodeDecodeError: data = json.loads(data)
+
+        url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search?resultType=core&query=ABSTRACT%3A%28%28ABSTRACT%3A%22proteolysis%20targeting%20chimera%22%20OR%20ABSTRACT%3A%22proteolysis%20targeting%20chimeric%22%29%20OR%20%28%28PROTAC%20OR%20SNIPER%29%20AND%20%28degradation%20OR%20degrade%20OR%20proteolysis%29%29%20OR%20%28degrader%20AND%20%28proteasome%20OR%20ubiquitin%29%29%29&resultType=lite&cursorMark=*&pageSize=1000&format=json"
+        response = requests.get(url)
+        data = response.json()
+        
         #df = pd.read_json(json.dumps(data['resultList']['result']), orient='records')
         df = pd.json_normalize(data['resultList']['result'])
     
@@ -962,6 +969,15 @@ class Protac_buckets(object):
         (see queries_protac.py)
         '''
         # print("\t\t- Querying ChEMBL...")
+        
+        # URL to local ChEMBL database
+        # If database url not supplied, get from environemnt variable
+        database_url = None
+        if database_url is None:
+            database_url = os.getenv('CHEMBL_DB')
+        # ChEMBL DB connection - reestablish connection to avoid timeout
+        self.engine = create_engine(database_url)
+
         # small_mol_info = pd.read_sql_query(chembl_small_mol, self.engine)
         self.all_chembl_targets = pd.read_sql_query(chembl_small_mol_active_targets, self.engine)
         # self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')

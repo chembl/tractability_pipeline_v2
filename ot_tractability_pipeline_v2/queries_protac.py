@@ -93,10 +93,14 @@ chembl_small_mol_active_targets = """
     AND tc.component_id = cs.component_id
     AND td.tax_id = 9606
     AND td.target_type LIKE '%PROTEIN%'
+    AND act.potential_duplicate = 0
     AND act.pchembl_value >= 5
     AND md.molecule_type not in ('Oligonucleotide', 'Oligosaccharide')
     AND ((md.molecule_type in ('Protein', 'Unclassified', 'Unknown') AND cp.mw_freebase <= 1500) OR (md.molecule_type = 'Small molecule'))
     """.format(CHEMBL_VERSION)
 #    AND md.molecule_type = 'Small molecule'
+#    AND a.assay_type = 'B'
+#    AND a.relationship_type = 'D'
+#    AND (act.data_validity_comment is NULL OR act.data_validity_comment = 'Manually validated')
 
     
