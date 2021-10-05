@@ -292,8 +292,8 @@ def main(args=None):
     
     
     # Get a unique list of Gene IDs from OT
-    gene_list = pd.read_csv(args.genes, encoding='utf-8', header=None, names=['ensembl_gene_id'], usecols=[0])
-    ensembl_id_list = list(gene_list['ensembl_gene_id'].unique())
+    gene_df = pd.read_csv(args.genes, encoding='utf-8', header=None, names=['ensembl_gene_id'], usecols=[0])
+    gene_df = gene_df.drop_duplicates(subset=['ensembl_gene_id'])
     
     # URL to local ChEMBL database
     global database_url
@@ -330,7 +330,7 @@ def main(args=None):
 
     # From Ensembl gene ID, get Uniprot, GO.CC, Symbol and PDB codes
     print("\nSetting up the pipeline...\n")
-    setup = Pipeline_setup(ensembl_id_list, store_fetched)
+    setup = Pipeline_setup(gene_df, store_fetched)
 
     # Get small molecule tractability info
     print("\nRunning the Small Molecule workflow...\n")
