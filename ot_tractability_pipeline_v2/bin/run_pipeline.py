@@ -27,8 +27,10 @@ import mysql.connector as sql
 PY3 = sys.version > '3'
 if PY3:
     import urllib.request as urllib2
+    import urllib.parse as urllib
 else:
     import urllib2
+    import urllib
 
 from ot_tractability_pipeline_v2.queries_sm import *
 from ot_tractability_pipeline_v2.queries_ab import *
