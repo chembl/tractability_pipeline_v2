@@ -63,15 +63,20 @@ Additionaly the data fetched during execution is saved into a 'fetched data' fol
 
 
 ## Installation
-Change to the directory containing this file
+
+To install the pipeline, change to the directory containing this README file (contains also the setup.py file), then run:
 
 `pip install .`
 
-Install cxoracle
+From the same directory, install the PROTAC named entity recognition (NER) model by running:
+
+`pip install ./ot_tractability_pipeline_v2/en_NER_PROTAC-0.2.5.tar.gz`
+
+Install cx-oracle (e.g. by running: `pip install cx-oracle`).
 
 Set the following environment variables:
 
-`CHEMBL_DB=oracle://address:to@local.chembl` 
+`CHEMBL_DB=oracle://address:to@local.chembl` (Note that this is not a valid address and needs to be replaced by your ChEMBL connection.)
 
 `CHEMBL_VERSION=29`
 
@@ -85,7 +90,7 @@ Run the pipeline with the following command:
 
 `run-ot-pipeline-v2 genes.csv`
 
-where `genes.csv` is a file with one Ensembl Gene ID per line with no headers.
+where `genes.csv` is a file with one Ensembl Gene ID per line in the first column of the file. No header is expected.
 
 
 

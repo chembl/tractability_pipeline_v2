@@ -728,9 +728,11 @@ class Protac_buckets(object):
         # Use pretrained SpaCy model for Named Entity Recognition trained for detection of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'.
 
         import spacy
-        model_dir = os.path.join(DATA_PATH, "SpaCy_NER_PROTAC_model")
-        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE' from", model_dir)
-        nlp2 = spacy.load(model_dir)
+#        model_dir = os.path.join(DATA_PATH, "SpaCy_NER_PROTAC_model")
+#        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE' from", model_dir)
+#        nlp2 = spacy.load(model_dir)
+        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'.")
+        nlp2 = spacy.load(r'en_NER_PROTAC')
         
         def predict_abstracts(textcol):
             docx = nlp2(textcol)

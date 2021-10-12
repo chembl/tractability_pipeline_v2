@@ -11,7 +11,7 @@ setuptools.setup(
     description="Python script for assigning genes to tractability buckets",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/melschneider/tractability_pipeline_v2",
+    url="https://github.com/chembl/tractability_pipeline_v2",
     packages=setuptools.find_packages(),
     install_requires=[i.strip() for i in open("requirements.txt").readlines()],
     include_package_data=True,
