@@ -895,7 +895,7 @@ class Protac_buckets(object):
 
         print("\t- Assessing ubiquitation site bucket 6...")
         
-        PhosphoSitePlus = pd.read_csv(os.path.join(DATA_PATH, "PSP_Ubiquitination_site_dataset"), skiprows=3, sep='\t')
+        PhosphoSitePlus = pd.read_csv(os.path.join(DATA_PATH, "PSP_Ubiquitination_site_dataset.tsv"), skiprows=3, sep='\t')
         mUbiSiDa = pd.read_excel(os.path.join(DATA_PATH, "mUbiSiDa_data_2013_10_22.xlsx"), header=None)
         ub_df = pd.read_csv(os.path.join(DATA_PATH, 'ubiquitination_sites.csv'))
         #self.out_df = ub_df.merge(self.out_df, on='symbol', how='right')
