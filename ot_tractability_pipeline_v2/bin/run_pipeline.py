@@ -219,6 +219,11 @@ class Pipeline_setup(object):
         
         self.id_xref = self.id_xref.merge(mygene_results, how='left', on='ensembl_gene_id')
 
+        # check if columns exist and if not create them (filled with np.NaN or "")
+        cols1 = ['go.BP','go.CC','go.MF']
+        cols2 = ['go.BP.evidence','go.CC.evidence','go.MF.evidence','go.BP.gocategory','go.CC.gocategory','go.MF.category','go.BP.id','go.CC.id','go.MF.id','go.BP.qualifier','go.CC.qualifier','go.MF.qualifier','go.BP.term','go.CC.term','go.MF.term']
+        self.id_xref = self.id_xref.reindex(self.id_xref.columns.union(cols1, sort=False), axis=1, fill_value=np.NaN)
+        self.id_xref = self.id_xref.reindex(self.id_xref.columns.union(cols2, sort=False), axis=1, fill_value="")
         # fix missing data in aggregated go columns (When there is only one entry for BP/CC/MF, the aggregated go.BP/CC/MF column is NAN, but the data is available in the seperate respective columns and thus fetched from there.)
         self.id_xref['go.BP'].fillna("[{'evidence': '"+self.id_xref['go.BP.evidence']+"', 'gocategory': '"+self.id_xref['go.BP.gocategory']+"', 'id': '"+self.id_xref['go.BP.id']+"', 'qualifier': '"+self.id_xref['go.BP.qualifier']+"', 'term': '"+self.id_xref['go.BP.term']+"'}]", inplace=True)
         self.id_xref['go.CC'].fillna("[{'evidence': '"+self.id_xref['go.CC.evidence']+"', 'gocategory': '"+self.id_xref['go.CC.gocategory']+"', 'id': '"+self.id_xref['go.CC.id']+"', 'qualifier': '"+self.id_xref['go.CC.qualifier']+"', 'term': '"+self.id_xref['go.CC.term']+"'}]", inplace=True)

@@ -90,7 +90,9 @@ Run the pipeline with the following command:
 
 `run-ot-pipeline-v2 genes.csv`
 
-where `genes.csv` is a file with one Ensembl Gene ID per line in the first column of the file. No header is expected.
+where `genes.csv` is a file with one Ensembl Gene ID per line in the first column of the file. 
+No header is required. 
+Any other present columns will be ignored. 
 
 
 

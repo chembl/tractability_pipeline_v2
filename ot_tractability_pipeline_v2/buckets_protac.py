@@ -719,6 +719,7 @@ class Protac_buckets(object):
         '''
         print("\t- Assessing PROTAC literature (automated detection)...")
 
+        print("\t\t Searching for PROTAC related literature based on abstract text available through EuropePMC...")
         self.papers_df = self._search_papers()
         
         self.papers_df['search_id'] = self.papers_df.apply(self._search_ID, axis=1)
@@ -731,9 +732,10 @@ class Protac_buckets(object):
 #        model_dir = os.path.join(DATA_PATH, "SpaCy_NER_PROTAC_model")
 #        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE' from", model_dir)
 #        nlp2 = spacy.load(model_dir)
-        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'.")
+        print("\t\t  Loading custom SpaCy model 'en_NER_PROTAC' for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'")
         nlp2 = spacy.load(r'en_NER_PROTAC')
         
+        print("\t\t  Performing Named Entity Recognition on publication abstracts...")
         def predict_abstracts(textcol):
             docx = nlp2(textcol)
             pred = [(ent.label_, ent.text) for ent in docx.ents]
