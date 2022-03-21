@@ -126,8 +126,8 @@ Bucket 2 (-) Targets with PROTAC in clinical phase 2 or 3
 Bucket 3 (-) Targets with PROTAC in clinical phase 1  
 Bucket 4 (Europe PMC) Targets mentioned in PROTAC literature (manually curated) + additional information via automated assessments
 Bucket 5 (UniProt) Targets with UniProt keyword: "Ubl conjugation [KW-0832]"  
-Bucket 6 (PhosphoSitePlus, mUbiSiDa, Woong et al. 2011) Targets with reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa (2013), or [Woong et al. 2011]  
-Bucket 7 (Mathieson et al. 2018) Targets with available half-life data  
+Bucket 6 (PhosphoSitePlus, mUbiSiDa, Kim et al. 2011) Targets with reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa (2013), or [Kim et al. 2011](https://www.sciencedirect.com/science/article/pii/S1097276511006757)  
+Bucket 7 ([Mathieson et al. 2018](https://www.nature.com/articles/s41467-018-03106-1)) Targets with available half-life data  
 Bucket 8 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 
 PROTAC_location_Bucket  
@@ -231,7 +231,7 @@ Column 'Uniprot_keyword' indicates whether a target has the keyword: "Ubl conjug
 Column 'Uniprot_PTM' contains additional information on posttranslational modifications from UniProt and is not associated with a bucket.  
 Column 'Uniprot_CrossLink' contains additional information on crosslinks from UniProt and is not associated with a bucket.  
 Columns 'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013' and 'number_of_ubiquitination_sites' relate to bucket 6 and represent information available 
-from the two databases PhosphoSitePlus and mUbiSiDa and the dataset from Woong et al., respectively.  
+from the two databases PhosphoSitePlus and mUbiSiDa and the dataset from Kim et al., respectively.  
 Columns 'Max_halflife' and 'Min_halflife' contain the max/min values of half-life data means measured in different cell types from Mathieson et al. and provides more detail to bucket 7 assessment. 
 The available data is provided in columns 'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean'.  
 Column 'count_compound_chembl_ids_PROTAC' contains the number of compounds found in ChEMBL related to bucket 8.
@@ -244,7 +244,7 @@ associated with the ubiquitin ligase complex, including E3 ligases (filtering is
 "protac_literature_evidence_filtered.csv"). A literature count is provided per target with publication titles, links and full abstract texts.  
 
 To aid further in literature data processing with respect to detection of PROTAC relevant information additional Natural Language Processing (NLP) is performed with a Named Entity Recognition (NER) model that has been trained and implemented for 
-automatic detection of the entities "PROTAC_TARGET", "PROTAC_NAME", and "E3_LIGASE". The ScispaCy (Neumann et al. 2019) pre-trained model "en_ner_jnlpba_md" (trained on the JNLPBA corpus) was used to retrain the PROTAC-NER model on 164 abstracts 
+automatic detection of the entities "PROTAC_TARGET", "PROTAC_NAME", and "E3_LIGASE". The ScispaCy ([Neumann et al. 2019](https://aclanthology.org/W19-5034/)) pre-trained model "en_ner_jnlpba_md" (trained on the JNLPBA corpus) was used to retrain the PROTAC-NER model on 164 abstracts 
 that mention PROTACs, with 427 manually labelled entities (280 "PROTAC_TARGET", 57 "PROTAC_NAME", and 90 "E3_LIGASE"). The PROTAC-NER abstract screening is performed on all PROTAC literature abstracts when running the pipeline and the results are 
 provided to the user as addition to the literature evidence list. The trained PROTAC-NER model is also provided with the pipeline code and it can be used with spaCy to detect PROTAC entities in any text.  
 
