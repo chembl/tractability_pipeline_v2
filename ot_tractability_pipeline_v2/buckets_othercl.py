@@ -21,7 +21,7 @@ import sys
 import numpy as np
 import pandas as pd
 import pkg_resources
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 PY3 = sys.version > '3'
 if PY3:
@@ -118,7 +118,7 @@ class Othercl_buckets(object):
                 {0}.site_components sc
             where cs.component_id = sc.component_id
             and sc.site_id in {1}'''.format(CHEMBL_VERSION, tuple(chunk))
-            df_list2.append(pd.read_sql_query(q2, self.engine))
+            df_list2.append(pd.read_sql_query(text(q2), self.engine))
 
         binding_subunit = pd.concat(df_list2, sort=False)
 
@@ -141,12 +141,12 @@ class Othercl_buckets(object):
 
         print("\t- Assessing clinical buckets 1-3...")
 
-        self.all_chembl_targets = pd.read_sql_query(chembl_clinical_other_targets, self.engine)
+        self.all_chembl_targets = pd.read_sql_query(text(chembl_clinical_other_targets), self.engine)
         self.all_chembl_targets.loc[self.all_chembl_targets['ref_type'] == 'Expert', ['ref_id', 'ref_url']] = 'NA'
 
         self._process_protein_complexes()
 
-        othercl_info = pd.read_sql_query(chembl_clinical_other, self.engine)
+        othercl_info = pd.read_sql_query(text(chembl_clinical_other), self.engine)
         self.all_chembl_targets = self.all_chembl_targets.merge(othercl_info, how='left', on='parent_molregno')
 
         if self.store_fetched: 
