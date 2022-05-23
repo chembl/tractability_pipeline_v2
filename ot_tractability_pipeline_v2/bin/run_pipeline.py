@@ -23,7 +23,6 @@ import json
 import requests
 from io import StringIO
 import ast
-import mysql.connector as sql
 
 PY3 = sys.version > '3'
 if PY3:
@@ -238,18 +237,20 @@ class Pipeline_setup(object):
         Add information from Illuminating the Druggable Genome (IDG) project - Pharos/TCRD: protein family classification and Target Development Levels (TDLs)
         '''
         print("\t- Getting data from IDG/TCRD version 6.11.0...")
+        conn_string = 'mysql://tcrd@tcrd.kmc.io:3306/tcrd6110'
         # For latest database version check http://juniper.health.unm.edu/tcrd/
-        db_connection = sql.connect(host='tcrd.kmc.io', db='tcrd6110', user='tcrd')
+        # db_connection = sql.connect(host='tcrd.kmc.io', db='tcrd6110', user='tcrd')
+        engine = create_engine(conn_string)
         # Read in everything from the protein table
         query1 = "SELECT id, name, description, uniprot, sym, family ,dtoclass \
                  FROM protein"
-        protein = pd.read_sql(query1, con=db_connection)
+        protein = pd.read_sql(query1, con=engine)
         # Read in info from the target table
         query2 = "SELECT id, name, ttype, tdl, fam \
                  FROM target" # \ WHERE tdl='Tclin' OR tdl='Tchem'"
-        target = pd.read_sql(query2, con=db_connection)
+        target = pd.read_sql(query2, con=engine)
         # Closing the connection
-        db_connection.close()
+        engine.dispose()
         # Joining the Target and Protein Data Frames on internal id
         protein = protein.set_index("id")
         target = target.set_index("id")

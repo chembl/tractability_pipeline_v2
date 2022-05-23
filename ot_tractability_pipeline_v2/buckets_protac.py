@@ -16,7 +16,7 @@ import json
 import sys
 import time
 import os
-from sqlalchemy import create_engine # to re-establish connection
+from sqlalchemy import create_engine, text # to re-establish connection
 # import mygene
 import numpy as np
 import pandas as pd
@@ -982,8 +982,8 @@ class Protac_buckets(object):
         # ChEMBL DB connection - reestablish connection to avoid timeout
         self.engine = create_engine(database_url)
 
-        # small_mol_info = pd.read_sql_query(chembl_small_mol, self.engine)
-        self.all_chembl_targets = pd.read_sql_query(chembl_small_mol_active_targets, self.engine)
+        # small_mol_info = pd.read_sql_query(text(chembl_small_mol), self.engine)
+        self.all_chembl_targets = pd.read_sql_query(text(chembl_small_mol_active_targets), self.engine)
         # self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, on='parent_molregno')
 
         if self.store_fetched: 
@@ -1011,7 +1011,7 @@ class Protac_buckets(object):
             from {0}.target_dictionary td, {0}.binding_sites bs
             where td.tid = bs.tid and td.tid IN {1}
             '''.format(CHEMBL_VERSION, tuple(chunk))
-            df_list.append(pd.read_sql_query(q, self.engine))
+            df_list.append(pd.read_sql_query(text(q), self.engine))
 
         # Merge will set those with unknown binding site as NAN
         binding_site_info = pd.concat(df_list, sort=False)
@@ -1036,7 +1036,7 @@ class Protac_buckets(object):
             from {0}.component_sequences cs, {0}.site_components sc
             where cs.component_id = sc.component_id
             and cs.accession in {1}'''.format(CHEMBL_VERSION, tuple(chunk))
-            df_list2.append(pd.read_sql_query(q2, self.engine))
+            df_list2.append(pd.read_sql_query(text(q2), self.engine))
 
         binding_subunit = pd.concat(df_list2, sort=False)
 

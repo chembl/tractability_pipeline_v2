@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import itertools
-# from sqlalchemy import create_engine
+from sqlalchemy import text
 
 PY3 = sys.version > '3'
 if PY3:
@@ -128,10 +128,10 @@ class Small_molecule_buckets(object):
         '''
 
         # print("\t- Querying ChEMBL...")
-        self.all_chembl_targets = pd.read_sql_query(chembl_clinical_targets, self.engine)
+        self.all_chembl_targets = pd.read_sql_query(text(chembl_clinical_targets), self.engine)
         if self.store_fetched: 
             self.all_chembl_targets.to_csv("{}/sm_all_chembl_clinical_targets.csv".format(self.store_fetched))
-        small_mol_info = pd.read_sql_query(chembl_clinical_small_mol, self.engine)
+        small_mol_info = pd.read_sql_query(text(chembl_clinical_small_mol), self.engine)
         if self.store_fetched: 
             small_mol_info.to_csv("{}/sm_all_chembl_clinical_small_mol.csv".format(self.store_fetched))
         self.all_chembl_targets = self.all_chembl_targets.merge(small_mol_info, how='left', on='parent_molregno')
@@ -162,7 +162,7 @@ class Small_molecule_buckets(object):
 #            from {0}.target_dictionary td, {0}.binding_sites bs
 #            where td.tid = bs.tid and td.tid IN {1}
 #            '''.format(CHEMBL_VERSION, tuple(chunk))
-#            df_list.append(pd.read_sql_query(q, self.engine))
+#            df_list.append(pd.read_sql_query(text(q), self.engine))
 #
 #        # Merge will set those with unknown binding site as NAN
 #        binding_site_info = pd.concat(df_list, sort=False)
@@ -187,7 +187,7 @@ class Small_molecule_buckets(object):
             from {0}.component_sequences cs, {0}.site_components sc
             where cs.component_id = sc.component_id
             and cs.accession in {1}'''.format(CHEMBL_VERSION, tuple(chunk))
-            df_list2.append(pd.read_sql_query(q2, self.engine))
+            df_list2.append(pd.read_sql_query(text(q2), self.engine))
 
         binding_subunit = pd.concat(df_list2, sort=False)
 
@@ -459,19 +459,19 @@ class Small_molecule_buckets(object):
 
     def _search_chembl(self):
 
-        self.activities = pd.concat([pd.read_sql_query(pchembl_q, self.engine),
-                                     pd.read_sql_query(nm_q, self.engine),
-                                     pd.read_sql_query(km_kon_q, self.engine),
-                                     pd.read_sql_query(D_Tm_q, self.engine),
-                                     pd.read_sql_query(residual_act_q, self.engine),
-                                     pd.read_sql_query(Imax_q, self.engine),
-                                     pd.read_sql_query(Emax_q, self.engine)], sort=False)
+        self.activities = pd.concat([pd.read_sql_query(text(pchembl_q), self.engine),
+                                     pd.read_sql_query(text(nm_q), self.engine),
+                                     pd.read_sql_query(text(km_kon_q), self.engine),
+                                     pd.read_sql_query(text(D_Tm_q), self.engine),
+                                     pd.read_sql_query(text(residual_act_q), self.engine),
+                                     pd.read_sql_query(text(Imax_q), self.engine),
+                                     pd.read_sql_query(text(Emax_q), self.engine)], sort=False)
 
         if self.store_fetched: 
             self.activities.to_csv("{}/sm_chembl_activities.csv".format(self.store_fetched))
 
         # For faster testing
-        # self.activities = pd.read_sql_query(pchembl_q, self.engine)
+        # self.activities = pd.read_sql_query(text(pchembl_q), self.engine)
 
     def _structural_alerts(self):
         q = '''
@@ -488,7 +488,7 @@ class Small_molecule_buckets(object):
         and sa.alert_set_id = sas.alert_set_id
         '''.format(CHEMBL_VERSION)
 
-        alerts = pd.read_sql_query(q, self.engine)
+        alerts = pd.read_sql_query(text(q), self.engine)
 
         if self.store_fetched: 
             alerts.to_csv("{}/sm_chembl_alerts.csv".format(self.store_fetched))
