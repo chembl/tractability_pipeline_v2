@@ -401,8 +401,8 @@ class Protac_buckets(object):
         self.out_df['PROTAC_location_Bucket'] = self.out_df.apply(self._high_conf_locations, axis=1)
 
         print(self.out_df.columns)
-        if self.store_fetched: 
-            self.out_df.to_csv("{}/Checkpoint_PROTAC.csv".format(self.store_fetched))
+        # if self.store_fetched: 
+        #     self.out_df.to_csv("{}/Checkpoint_PROTAC.csv".format(self.store_fetched))
 
 
 
@@ -623,13 +623,11 @@ class Protac_buckets(object):
         # 7. rename last joined accession column to "accession_z"
         tagged_targets_df.rename(columns={"accession": "accession_z"}, inplace=True)        
         # 8. add additional mapping 'accession_z2' column based on protein name from publication matching end of UniProts full protein name
-        print("\t\t\t  Checkpoint 5")
         tagged_targets_df['accession_z2'] = ''
         tagged_targets_df['accession_z2'] = tagged_targets_df['name'].str.lower().apply(lambda x: human_proteome[human_proteome['protein_name_lower'].str.endswith(x)]['accession'].any(0))
         tagged_targets_df['accession_z2'].replace(to_replace=False, value=np.nan, inplace=True)        
         # as new 'accession' column take 'accession_x' (from tagged_targets_on_symbol)
         # if 'accession_x' (from tagged_targets_on_symbol) is NA, take 'accession_y' (from tagged_targets_on_gene_name)
-        print("\t\t\t  Checkpoint 6")
         tagged_targets_df['accession'] = tagged_targets_df['accession_x'].fillna(value=tagged_targets_df['accession_y'])
         # if 'accession' is still NA, take 'accession_z' (from tagged_targets_on_protein_name)
         tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['accession_z'])
@@ -764,12 +762,11 @@ class Protac_buckets(object):
         print("\t\t  Performing protein ID mapping via EuropePMC annotations and UniProt...")
         tagged_targets_df = self._process_IDs()
         
-        print("\t\t  Cleaning data...")
         tagged_targets_df = tagged_targets_df.drop_duplicates(['accession','full_id'], ignore_index=True)
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]
 
-        # remove duplicated rows (keep='first' is default), as lists are contained in df:
-        # convert the df to str type astype(str), drop duplicates and then select the rows from original df, thus output df still contains lists
+        # remove duplicated rows (keep='first' is default),
+        # as lists are contained in df: convert the df to str type astype(str), drop duplicates and then select the rows from original df, thus output df still contains lists
         tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates(ignore_index=True).index]
 
         def set_strings(x):
