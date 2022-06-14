@@ -72,13 +72,15 @@ From the same directory, install the PROTAC named entity recognition (NER) model
 
 `pip install ./ot_tractability_pipeline_v2/en_NER_PROTAC-0.2.5.tar.gz`
 
-Install cx-oracle (e.g. by running: `pip install cx-oracle`).
+Install cx-oracle (if an Oracle instance of ChEMBL shall be used) e.g. by running: `pip install cx-oracle`.
+
 
 Set the following environment variables:
 
-`CHEMBL_DB=oracle://address:to@local.chembl` (Note that this is not a valid address and needs to be replaced by your ChEMBL connection.)
+`CHEMBL_DB=[DB_TYPE]://[USERNAME]:[PASSWORD]@[HOST]:[PORT]/[DB_NAME]` (Note that this is not a valid address and needs to be replaced by your ChEMBL connection.)
+Example: "CHEMBL_DB=mysql://user:password@host:4233/chembl_30" or "CHEMBL_DB=oracle://..."   
 
-`CHEMBL_VERSION=29`
+`CHEMBL_VERSION=30`
 
 ! The current pipeline works with ChEMBL version 26 and more recent versions (but not older ones) !
 

@@ -580,6 +580,7 @@ class Protac_buckets(object):
         2) Getting the human proteome from Uniprot in order to recover more mappings by 'symbol', 'gene_name' and 'protein_name'.
         '''
         # 1) ---
+        print("\t\t\t  1) Processing the EuropePMC literature IDs, the provided annotations and the mappings to UniProt accessions...")
         #grouped_tags = self.tags.groupby('name').first()
         #tagged_annotations = self.annotations.merge(grouped_tags, how='left', left_on='exact', right_on='name')
         tagged_annotations = self.annotations.merge(self.tags, how='left', left_index=True, right_index=True)
@@ -600,6 +601,7 @@ class Protac_buckets(object):
         joined['name_lower'] = joined['name'].str.lower()
         
         # 2) ---
+        print("\t\t\t  2) Getting the human proteome from Uniprot in order to recover more mappings by 'symbol', 'gene_name' and 'protein_name'...")
         #human_proteome = self._get_human_proteome()
         human_proteome = self.human_proteome
         # Join on human_proteome data to get human UniProt accession IDs:
@@ -613,17 +615,21 @@ class Protac_buckets(object):
         # 5. join tagged_targets_df with third new dataset 'tagged_targets_on_protein_name' using lowercase names
         tagged_targets_on_protein_name = joined.merge(human_proteome, left_on='name_lower', right_on='protein_name_lower', how='left')
         tagged_targets_df = tagged_targets_df.merge(tagged_targets_on_protein_name[['name','accession','protein_name']], on='name', how='left')
-        # 6. remove duplicated rows (keep='first' is default), as lists are contained in df:
-        # convert the df to str type astype(str), drop duplicates and then select the rows from original df, thus output df still contains lists
-        tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]        
+        
+        # 6. remove duplicated rows (keep='first' is default)
+        # As lists are contained in df: [convert the df to str type astype(str),] drop duplicates and then select the rows from original df, thus output df still contains lists
+        tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.drop_duplicates(subset=['exact', 'link_id']).index]
+        #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]        
         # 7. rename last joined accession column to "accession_z"
         tagged_targets_df.rename(columns={"accession": "accession_z"}, inplace=True)        
         # 8. add additional mapping 'accession_z2' column based on protein name from publication matching end of UniProts full protein name
+        print("\t\t\t  Checkpoint 5")
         tagged_targets_df['accession_z2'] = ''
         tagged_targets_df['accession_z2'] = tagged_targets_df['name'].str.lower().apply(lambda x: human_proteome[human_proteome['protein_name_lower'].str.endswith(x)]['accession'].any(0))
         tagged_targets_df['accession_z2'].replace(to_replace=False, value=np.nan, inplace=True)        
         # as new 'accession' column take 'accession_x' (from tagged_targets_on_symbol)
         # if 'accession_x' (from tagged_targets_on_symbol) is NA, take 'accession_y' (from tagged_targets_on_gene_name)
+        print("\t\t\t  Checkpoint 6")
         tagged_targets_df['accession'] = tagged_targets_df['accession_x'].fillna(value=tagged_targets_df['accession_y'])
         # if 'accession' is still NA, take 'accession_z' (from tagged_targets_on_protein_name)
         tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['accession_z'])
@@ -641,7 +647,7 @@ class Protac_buckets(object):
         tagged_targets_df.rename(columns = {'id':'pub_id'}, inplace = True)
 #        return joined[['accession', 'prefix', 'exact', 'postfix', 'section', 'full_id', 'journalTitle', 'title']]
         return tagged_targets_df[['accession', 'name', 'exact', 'pub_id', 'short_id', 'full_id', 'section', 'title', 
-                                  'abstractText', 'NER_PROTAC_label']] #, 'sentences', 'sentence_count'
+                                  'abstractText', 'NER_PROTAC_label_title', 'NER_PROTAC_label_abstract']] #, 'sentences', 'sentence_count'
 
      
     def _detect_targets_in_literature(self, tagged_targets_df):
@@ -735,23 +741,30 @@ class Protac_buckets(object):
         print("\t\t  Loading custom SpaCy model 'en_NER_PROTAC' for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'")
         nlp2 = spacy.load(r'en_NER_PROTAC')
         
-        print("\t\t  Performing Named Entity Recognition on publication abstracts...")
+        print("\t\t  Performing Named Entity Recognition on publication titles and abstracts...")
         def predict_abstracts(textcol):
             docx = nlp2(textcol)
             pred = [(ent.label_, ent.text) for ent in docx.ents]
             return pred
                 
-        self.papers_df['NER_PROTAC_label'] = self.papers_df['abstractText'].map(predict_abstracts)
+        self.papers_df['NER_PROTAC_label_title'] = self.papers_df['abstractText'].map(predict_abstracts)
+        print("\t\t\t  1) Named Entity Recognition on publication titles finished.")
 
+        self.papers_df['NER_PROTAC_label_abstract'] = self.papers_df['abstractText'].map(predict_abstracts)
+        print("\t\t\t  2) Named Entity Recognition on publication abstracts finished.")
+        
         # =============================================================================
 
         if self.store_fetched: 
             self.papers_df.to_csv("{}/protac_pmc_papers.csv".format(self.store_fetched), encoding='utf-8')
                 
+        print("\t\t  Getting gene and protein tags from EuropePMC...")
         self._get_tagged_targets()
 
+        print("\t\t  Performing protein ID mapping via EuropePMC annotations and UniProt...")
         tagged_targets_df = self._process_IDs()
         
+        print("\t\t  Cleaning data...")
         tagged_targets_df = tagged_targets_df.drop_duplicates(['accession','full_id'], ignore_index=True)
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]
 
@@ -779,7 +792,8 @@ class Protac_buckets(object):
         f['title'] = set_title_strings
         #f['exact_terms'] = set_title_strings
         f['abstractText'] = set_title_strings
-        f['NER_PROTAC_label'] = set_from_list
+        f['NER_PROTAC_label_title'] = set_from_list
+        f['NER_PROTAC_label_abstract'] = set_from_list
         
         tagged_targets_df_grouped = tagged_targets_df.groupby(['accession']).agg(f).reset_index(drop=True)
         
@@ -818,11 +832,13 @@ class Protac_buckets(object):
         if self.store_fetched: 
             literature_evidence = self.out_df.loc[self.out_df['mentioned_in_PROTAC_literature'] == 1]
             literature_evidence = literature_evidence[['accession','symbol','protein_name','literature_count_PROTAC','title','full_id',
-                                 'abstractText', 'NER_PROTAC_label']].sort_values(
+                                 'abstractText', 'NER_PROTAC_label_title', 'NER_PROTAC_label_abstract']].sort_values(
                     by=['literature_count_PROTAC'],ascending=[0]) # ,'sentences','sentence_count','tag_in_sentence_count'
             literature_evidence = literature_evidence.drop_duplicates(['accession'], ignore_index=True)
             literature_evidence.to_csv("{}/protac_literature_evidence.csv".format(self.store_fetched), encoding='utf-8')
+            print("\t\t  PROTAC literature evidence saved.")
 
+            print("\t\t  Splitting PROTAC literature targets depending on involvement with E3 ligase complex (using UniProt data)...")
             human_ubi_ligases = self._get_human_ubi_ligases()
             literature_evidence_ubi_ligases = literature_evidence.merge(human_ubi_ligases['accession'], how='inner')
             literature_evidence_ubi_ligases.to_csv("{}/protac_literature_evidence_ubi_ligase_complex.csv".format(self.store_fetched), encoding='utf-8')
@@ -830,6 +846,7 @@ class Protac_buckets(object):
             #literature_evidence_ubi_ligases.to_csv("{}/protac_literature_evidence_ubi_ligases2.csv".format(self.store_fetched), encoding='utf-8')
             literature_evidence_filtered = literature_evidence[~literature_evidence['accession'].isin(human_ubi_ligases['accession'])]
             literature_evidence_filtered.to_csv("{}/protac_literature_evidence_filtered.csv".format(self.store_fetched), encoding='utf-8')
+            print("\t\t  Split datasets on PROTAC literature saved.")
 
         print(self.out_df.columns)
 
