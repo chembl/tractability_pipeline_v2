@@ -290,7 +290,7 @@ class Antibody_buckets(object):
 
     @staticmethod
     def post_request_uniprot(url, data):
-        base = 'http://www.uniprot.org'
+        base = 'http://legacy.uniprot.org'
         full_url = "%s/%s" % (base, url)
 
         if isinstance(data, (list, tuple)):

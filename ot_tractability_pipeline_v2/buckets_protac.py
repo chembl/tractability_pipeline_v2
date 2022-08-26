@@ -679,7 +679,7 @@ class Protac_buckets(object):
         OLD query: ("ubiquitin ligase complex" OR name:"ubiquitin-protein ligase") AND organism:"Homo sapiens (Human) [9606]" AND proteome:up000005640
         query: (annotation:((type:function "ubiquitin-protein ligase complex") OR (type:function "ubiquitin ligase complex") OR (type:function "e3 protein ligase") OR (type:subunit "ubiquitin-protein ligase") OR (type:subunit "ubiquitin ligase complex")) OR name:"ubiquitin-protein ligase") AND organism:"Homo sapiens (Human) [9606]" AND proteome:up000005640
         '''
-        full_url = 'https://www.uniprot.org/uniprot/?query=%28annotation%3A%28%28type%3Afunction+%22ubiquitin-protein+ligase+complex%22%29+OR+%28type%3Afunction+%22ubiquitin+ligase+complex%22%29+OR+%28type%3Afunction+%22e3+protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin-protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin+ligase+complex%22%29%29+OR+name%3A%22ubiquitin-protein+ligase%22%29+AND+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22+AND+proteome%3Aup000005640&format=tab&columns=id,entry+name,reviewed,protein+names,genes'
+        full_url = 'https://legacy.uniprot.org/uniprot/?query=%28annotation%3A%28%28type%3Afunction+%22ubiquitin-protein+ligase+complex%22%29+OR+%28type%3Afunction+%22ubiquitin+ligase+complex%22%29+OR+%28type%3Afunction+%22e3+protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin-protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin+ligase+complex%22%29%29+OR+name%3A%22ubiquitin-protein+ligase%22%29+AND+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22+AND+proteome%3Aup000005640&format=tab&columns=id,entry+name,reviewed,protein+names,genes'
         from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
         Uniprot_human_ubi_ligases = Antibody_buckets.make_request(full_url, data=None)
         Uniprot_human_ubi_ligases = [x.split('\t') for x in Uniprot_human_ubi_ligases.split('\n')]
@@ -865,7 +865,7 @@ class Protac_buckets(object):
 
         print("\t- Assessing UniProt ubiquitination indication bucket 5...")
 
-        full_url = 'https://www.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
+        full_url = 'https://legacy.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
         
         from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
         Uniprot_ubl_conjugation = Antibody_buckets.make_request(full_url, data=None)

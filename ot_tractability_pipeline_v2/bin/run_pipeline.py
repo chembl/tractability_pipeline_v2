@@ -115,29 +115,32 @@ class Pipeline_setup(object):
         '''
         print("\t- Getting human proteome data from UniProt...")
         #full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE)'
-        full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
+        full_url = 'https://legacy.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
 
         Uniprot_human_proteome = self.make_request(full_url, data=None)
         Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
         human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
-        # rename columns
-        human_proteome.rename(columns={'Entry': 'accession',
-                                       'Gene names  (primary )': 'gene_name', 
-                                       'Gene names  (synonym )': 'gene_name_synonyms'}, inplace=True)
-        # only keep row when 'Entry name' is available (discard NAN row)
-        human_proteome = human_proteome.loc[human_proteome['Entry name'].notna()]
-        # create 'symbol' column
-        human_proteome['symbol'] = human_proteome['gene_name']
-        #human_proteome[['symbol','Human']] = human_proteome['Entry name'].str.split("_",expand=True)
-        # create 'gene_name' column (using first entry in 'Gene names')
-        #human_proteome['gene_name'] = human_proteome['Gene names'].str.split(" ",expand=True)[0]
-        # create 'protein_name' column (using primary entry, before names in parentheses in 'Protein names', escaping with \\ is reqired)
-        human_proteome['protein_name'] = human_proteome['Protein names'].str.split(" \\(",expand=True)[0]
-        # save lower case protein name for future case insensitive mapping
-        human_proteome['protein_name_lower'] = human_proteome['protein_name'].str.lower()
-        # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
-        # (which should be the primary UniProtID) count: 20487
-        human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
+        
+        if not human_proteome.empty:
+            
+            # only keep row when 'Entry name' is available (discard NAN row)
+            human_proteome = human_proteome.loc[human_proteome['Entry name'].notna()]
+        
+            # rename columns
+            human_proteome = human_proteome.rename({'Entry': 'accession', 'Gene names  (primary )': 'gene_name', 'Gene names  (synonym )': 'gene_name_synonyms'}, axis = 1)
+        
+            # create 'symbol' column
+            human_proteome['symbol'] = human_proteome['gene_name']
+            #human_proteome[['symbol','Human']] = human_proteome['Entry name'].str.split("_",expand=True)
+            # create 'gene_name' column (using first entry in 'Gene names')
+            #human_proteome['gene_name'] = human_proteome['Gene names'].str.split(" ",expand=True)[0]
+            # create 'protein_name' column (using primary entry, before names in parentheses in 'Protein names', escaping with \\ is required)
+            human_proteome['protein_name'] = human_proteome['Protein names'].str.split(" \\(",expand=True)[0]
+            # save lower case protein name for future case insensitive mapping
+            human_proteome['protein_name_lower'] = human_proteome['protein_name'].str.lower()
+            # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
+            # (which should be the primary UniProtID) count: 20487
+            human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
         
         #self.human_proteome = human_proteome
         return human_proteome
@@ -149,7 +152,7 @@ class Pipeline_setup(object):
         '''
         print("\t- Mapping UniProt accessions to Ensembl gene IDs...")
         accession_str = ' '.join(self.human_proteome['accession'].to_list())
-        url = 'https://www.uniprot.org/uploadlists/'
+        url = 'https://legacy.uniprot.org/uploadlists/'
         params = {
         'from': 'ACC+ID',
         'to': 'ENSEMBL_ID',
@@ -161,10 +164,21 @@ class Pipeline_setup(object):
         data = data.encode('utf-8')
         req = urllib2.Request(url, data)
         with urllib2.urlopen(req) as f:
-           response = f.read()
-        mapping = pd.read_csv(StringIO(response.decode('utf-8')), sep='\t')
-        mapping.rename(columns={'From': 'accession', 
-                                'To': 'ensembl_gene_id'}, inplace=True)
+            
+            response = f.read()
+            mapping_ = pd.read_csv(StringIO(response.decode('utf-8')), sep='\t')
+        
+            if not mapping_.empty:
+            
+                mapping_.rename(columns={'From': 'accession', 'To': 'ensembl_gene_id'}, inplace=True)
+                mapping_['ensembl_gene_id'] = mapping_['ensembl_gene_id'].str.split("." , expand = True)[0]
+                mapping = mapping_
+            
+                #mapping['ensembl_gene_id'] = mapping.ensembl_gene_id.str.split('.')
+                #mapping['ensembl_gene_id'] = mapping['ensembl_gene_id'].iloc[0][0]
+                #mapping = mapping[['accession', 'ensembl_gene_id']]
+                #mapping = pd.DataFrame(mapping)
+
         return mapping
 
         
