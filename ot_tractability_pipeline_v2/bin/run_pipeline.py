@@ -5,11 +5,13 @@ This script runs the whole tractability pipeline (all sub-workflows) and concate
 It contains also the functions for the pipeline setup.
 
 Created on Mon Feb  3 10:38:51 2020
-@author: Melanie Schneider
+@author: Melanie Schneider and Harris Ioannidis
 """
 
-#import time
+import time
+import re
 #import zipfile
+import zlib
 import sys
 import argparse
 import datetime
@@ -23,6 +25,9 @@ import json
 import requests
 from io import StringIO
 import ast
+from xml.etree import ElementTree
+from urllib.parse import urlparse, parse_qs, urlencode
+from requests.adapters import HTTPAdapter, Retry
 
 PY3 = sys.version > '3'
 if PY3:
@@ -43,8 +48,15 @@ from ot_tractability_pipeline_v2.buckets_protac import *
 from ot_tractability_pipeline_v2.buckets_othercl import *
 
 
-
 DATA_PATH = pkg_resources.resource_filename('ot_tractability_pipeline_v2', 'data/')
+
+POLLING_INTERVAL = 3
+API_URL = "https://rest.uniprot.org"
+        
+        
+retries = Retry(total=5, backoff_factor=0.25, status_forcelist=[500, 502, 503, 504])
+session = requests.Session()
+session.mount("https://", HTTPAdapter(max_retries=retries))
 
 
 class Pipeline_setup(object):
@@ -90,8 +102,7 @@ class Pipeline_setup(object):
             3) Use the command line flag '--db' if using the supplied run script  '''
                   )
             raise
-
-
+                    
     @staticmethod
     def make_request(url, data):
         request = urllib2.Request(url)
@@ -115,20 +126,23 @@ class Pipeline_setup(object):
         '''
         print("\t- Getting human proteome data from UniProt...")
         #full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE)'
-        full_url = 'https://legacy.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
+        # github url now #full_url = 'https://legacy.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
+        full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c&format=tsv&query=%28proteome:UP000005640%29'
 
         Uniprot_human_proteome = self.make_request(full_url, data=None)
         Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
         human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
         
+        
         if not human_proteome.empty:
             
             # only keep row when 'Entry name' is available (discard NAN row)
-            human_proteome = human_proteome.loc[human_proteome['Entry name'].notna()]
+            human_proteome = human_proteome.loc[human_proteome['Entry Name'].notna()]
         
             # rename columns
-            human_proteome = human_proteome.rename({'Entry': 'accession', 'Gene names  (primary )': 'gene_name', 'Gene names  (synonym )': 'gene_name_synonyms'}, axis = 1)
-        
+            #human_proteome = human_proteome.rename({'Entry': 'accession', 'Gene names  (primary )': 'gene_name', 'Gene names  (synonym )': 'gene_name_synonyms'}, axis = 1)
+            human_proteome = human_proteome.rename({'Entry': 'accession', 'Gene Names (primary)': 'gene_name', 'Gene Names (synonym)': 'gene_name_synonyms', 'GeneID': 'Cross-reference (GeneID)', 'ChEMBL': 'Cross-reference (ChEMBL)', 'BindingDB': 'Cross-reference (BindingDB)', 'DrugBank': 'Cross-reference (DrugBank)','PharmGKB': 'Cross-reference (PharmGKB)', 'Pharos': 'Cross-reference (Pharos)', 'PDB':'Cross-reference (PDB)', 'Subcellular location [CC]': 'Subcellular location [CC]', 'Transmembrane':'Transmembrane', 'Gene Ontology (cellular component)': 'Gene ontology (cellular component)'}, axis = 1)
+              
             # create 'symbol' column
             human_proteome['symbol'] = human_proteome['gene_name']
             #human_proteome[['symbol','Human']] = human_proteome['Entry name'].str.split("_",expand=True)
@@ -141,6 +155,7 @@ class Pipeline_setup(object):
             # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
             # (which should be the primary UniProtID) count: 20487
             human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
+            
         
         #self.human_proteome = human_proteome
         return human_proteome
@@ -148,36 +163,198 @@ class Pipeline_setup(object):
 
     def _map_accession_to_gene_id(self):
         '''
-        Mapping UniProt accessions to Ensembl gene IDs (see https://www.uniprot.org/help/api%5Fidmapping)
+        Mapping UniProt accessions to Ensembl gene IDs (see https://www.uniprot.org/help/id_mapping)
         '''
         print("\t- Mapping UniProt accessions to Ensembl gene IDs...")
-        accession_str = ' '.join(self.human_proteome['accession'].to_list())
-        url = 'https://legacy.uniprot.org/uploadlists/'
-        params = {
-        'from': 'ACC+ID',
-        'to': 'ENSEMBL_ID',
-        'format': 'tab',
-        'query': accession_str
-        }
+        human_proteome = self._get_human_proteome()
+        ids = human_proteome['accession'].to_list()
+        #ids = ' ,'.join(self.human_proteome['accession'].to_list())
         
-        data = urllib.urlencode(params)
-        data = data.encode('utf-8')
-        req = urllib2.Request(url, data)
-        with urllib2.urlopen(req) as f:
-            
-            response = f.read()
-            mapping_ = pd.read_csv(StringIO(response.decode('utf-8')), sep='\t')
+        n= 100000
+        chunks = [ids[i * n:(i + 1) * n] for i in range((len(ids) + n - 1) // n )] 
         
-            if not mapping_.empty:
+        ##########################################################################################
+        #######Functions to be used for mapping Uniprot accession codes to Ensembl IDs############
+        ##########################################################################################
+        
+        def check_response(response):
+            try:
+                response.raise_for_status()
+            except requests.HTTPError:
+                print(response.json())
+                raise
+
+        def get_next_link(headers):
+            re_next_link = re.compile(r'<(.+)>; rel="next"')
+            if "Link" in headers:
+                match = re_next_link.match(headers["Link"])
+                if match:
+                    return match.group(1)
+
+
+        def check_id_mapping_results_ready(job_id):
+            while True:
+                request = session.get(f"{API_URL}/idmapping/status/{job_id}")
+                check_response(request)
+                j = request.json()
+                if "jobStatus" in j:
+                    if j["jobStatus"] == "RUNNING":
+                        print(f"Retrying in {POLLING_INTERVAL}s")
+                        time.sleep(POLLING_INTERVAL)
+                    else:
+                        raise Exception(j["jobStatus"])
+                else:
+                    return bool(j["results"] or j["failedIds"])
+
+
+        def get_batch(batch_response, file_format, compressed):
+            batch_url = get_next_link(batch_response.headers)
+            while batch_url:
+                batch_response = session.get(batch_url)
+                batch_response.raise_for_status()
+                yield decode_results(batch_response, file_format, compressed)
+                batch_url = get_next_link(batch_response.headers)
+
+
+        def combine_batches(all_results, batch_results, file_format):
+            if file_format == "json":
+                for key in ("results", "failedIds"):
+                    if key in batch_results and batch_results[key]:
+                        all_results[key] += batch_results[key]
+            elif file_format == "tsv":
+                return all_results + batch_results[1:]
+            else:
+                return all_results + batch_results
+            return all_results
+
+
+        def get_id_mapping_results_link(job_id):
+            url = f"{API_URL}/idmapping/details/{job_id}"
+            request = session.get(url)
+            check_response(request)
+            return request.json()["redirectURL"]
+
+
+        def decode_results(response, file_format, compressed):
+            if compressed:
+                decompressed = zlib.decompress(response.content, 16 + zlib.MAX_WBITS)
+                if file_format == "json":
+                    j = json.loads(decompressed.decode("utf-8"))
+                    return j
+                elif file_format == "tsv":
+                    return [line for line in decompressed.decode("utf-8").split("\n") if line]
+                elif file_format == "xlsx":
+                    return [decompressed]
+                elif file_format == "xml":
+                    return [decompressed.decode("utf-8")]
+                else:
+                    return decompressed.decode("utf-8")
+            elif file_format == "json":
+                return response.json()
+            elif file_format == "tsv":
+                return [line for line in response.text.split("\n") if line]
+            elif file_format == "xlsx":
+                return [response.content]
+            elif file_format == "xml":
+                return [response.text]
+            return response.text
+
+
+        def get_xml_namespace(element):
+            m = re.match(r"\{(.*)\}", element.tag)
+            return m.groups()[0] if m else ""
+
+
+        def merge_xml_results(xml_results):
+            merged_root = ElementTree.fromstring(xml_results[0])
+            for result in xml_results[1:]:
+                root = ElementTree.fromstring(result)
+                for child in root.findall("{http://uniprot.org/uniprot}entry"):
+                    merged_root.insert(-1, child)
+            ElementTree.register_namespace("", get_xml_namespace(merged_root[0]))
+            return ElementTree.tostring(merged_root, encoding="utf-8", xml_declaration=True)
+
+
+        def print_progress_batches(batch_index, size, total):
+            n_fetched = min((batch_index + 1) * size, total)
+            print(f"Fetched: {n_fetched} / {total}")
+
+
+        def get_id_mapping_results_search(url):
+            parsed = urlparse(url)
+            query = parse_qs(parsed.query)
+            file_format = query["format"][0] if "format" in query else "json"
+            if "size" in query:
+                size = int(query["size"][0])
+            else:
+                size = 500
+                query["size"] = size
+            compressed = (
+                query["compressed"][0].lower() == "true" if "compressed" in query else False
+            )
+            parsed = parsed._replace(query=urlencode(query, doseq=True))
+            url = parsed.geturl()
+            request = session.get(url)
+            check_response(request)
+            results = decode_results(request, file_format, compressed)
+            total = int(request.headers["x-total-results"])
+            print_progress_batches(0, size, total)
+            for i, batch in enumerate(get_batch(request, file_format, compressed), 1):
+                results = combine_batches(results, batch, file_format)
+                print_progress_batches(i, size, total)
+            if file_format == "xml":
+                return merge_xml_results(results)
+            return results
+
+
+        def get_id_mapping_results_stream(url):
+            if "/stream/" not in url:
+                url = url.replace("/results/", "/results/stream/")
+            request = session.get(url)
+            check_response(request)
+            parsed = urlparse(url)
+            query = parse_qs(parsed.query)
+            file_format = query["format"][0] if "format" in query else "json"
+            compressed = (
+                query["compressed"][0].lower() == "true" if "compressed" in query else False
+            )
+            return decode_results(request, file_format, compressed)
+        
+        def submit_id_mapping(from_db, to_db, ids):
+            request = requests.post(
+                f"{API_URL}/idmapping/run",
+                data={"from": from_db, "to": to_db, "ids": ",".join(ids)},
+            )
+            check_response(request)
+            return request.json()["jobId"]
+        
+        ##########################################################################################
+        
+        
+        mappings_ = []
+        
+        for chk in chunks:
             
-                mapping_.rename(columns={'From': 'accession', 'To': 'ensembl_gene_id'}, inplace=True)
-                mapping_['ensembl_gene_id'] = mapping_['ensembl_gene_id'].str.split("." , expand = True)[0]
-                mapping = mapping_
+            job_id = submit_id_mapping(from_db = "UniProtKB_AC-ID", to_db = "Ensembl", ids = chk)
+
+            if check_id_mapping_results_ready(job_id):
+                link = get_id_mapping_results_link(job_id)
+                results = get_id_mapping_results_search(link)
+                
+            for item in results.items():
+        
+                mapping_ = pd.DataFrame.from_dict(item[1])
+                mapping_.rename(columns = {'from': 'accession', 'to': 'ensembl_gene_id'}, inplace = True)
+                mappings_.append(mapping_)
             
-                #mapping['ensembl_gene_id'] = mapping.ensembl_gene_id.str.split('.')
-                #mapping['ensembl_gene_id'] = mapping['ensembl_gene_id'].iloc[0][0]
-                #mapping = mapping[['accession', 'ensembl_gene_id']]
-                #mapping = pd.DataFrame(mapping)
+        mapping_ = pd.concat(mappings_)
+        mapping_
+        
+        if not mapping_.empty:
+            
+           # mapping_.rename(columns={'From': 'accession', 'To': 'ensembl_gene_id'}, inplace=True)
+            mapping_['ensembl_gene_id'] = mapping_['ensembl_gene_id'].str.split("." , expand = True)[0]
+            mapping = mapping_
 
         return mapping
 
