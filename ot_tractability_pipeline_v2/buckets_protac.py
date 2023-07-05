@@ -615,14 +615,18 @@ class Protac_buckets(object):
         # 5. join tagged_targets_df with third new dataset 'tagged_targets_on_protein_name' using lowercase names
         tagged_targets_on_protein_name = joined.merge(human_proteome, left_on='name_lower', right_on='protein_name_lower', how='left')
         tagged_targets_df = tagged_targets_df.merge(tagged_targets_on_protein_name[['name','accession','protein_name']], on='name', how='left')
-        
         # 6. remove duplicated rows (keep='first' is default)
-        # As lists are contained in df: [convert the df to str type astype(str),] drop duplicates and then select the rows from original df, thus output df still contains lists
         tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.drop_duplicates(subset=['exact', 'link_id']).index]
+        # As lists are contained in df: [convert the df to str type astype(str),] drop duplicates and then select the rows from original df, thus output df still contains lists        
+        print("\t\t\t  Checkpoint 3") 
+        #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.drop_duplicates(subset=['exact', 'link_id']).index]
+        print("\t\t\t  Checkpoint 0") 
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]        
         # 7. rename last joined accession column to "accession_z"
-        tagged_targets_df.rename(columns={"accession": "accession_z"}, inplace=True)        
+        tagged_targets_df.rename(columns={"accession": "accession_z"}, inplace=True)
+        print("\t\t\t  Checkpoint 1")        
         # 8. add additional mapping 'accession_z2' column based on protein name from publication matching end of UniProts full protein name
+        print("\t\t\t  Checkpoint 2")
         tagged_targets_df['accession_z2'] = ''
         tagged_targets_df['accession_z2'] = tagged_targets_df['name'].str.lower().apply(lambda x: human_proteome[human_proteome['protein_name_lower'].str.endswith(x)]['accession'].any(0))
         tagged_targets_df['accession_z2'].replace(to_replace=False, value=np.nan, inplace=True)        
@@ -679,14 +683,17 @@ class Protac_buckets(object):
         OLD query: ("ubiquitin ligase complex" OR name:"ubiquitin-protein ligase") AND organism:"Homo sapiens (Human) [9606]" AND proteome:up000005640
         query: (annotation:((type:function "ubiquitin-protein ligase complex") OR (type:function "ubiquitin ligase complex") OR (type:function "e3 protein ligase") OR (type:subunit "ubiquitin-protein ligase") OR (type:subunit "ubiquitin ligase complex")) OR name:"ubiquitin-protein ligase") AND organism:"Homo sapiens (Human) [9606]" AND proteome:up000005640
         '''
-        full_url = 'https://legacy.uniprot.org/uniprot/?query=%28annotation%3A%28%28type%3Afunction+%22ubiquitin-protein+ligase+complex%22%29+OR+%28type%3Afunction+%22ubiquitin+ligase+complex%22%29+OR+%28type%3Afunction+%22e3+protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin-protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin+ligase+complex%22%29%29+OR+name%3A%22ubiquitin-protein+ligase%22%29+AND+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22+AND+proteome%3Aup000005640&format=tab&columns=id,entry+name,reviewed,protein+names,genes'
+        #full_url = 'https://legacy.uniprot.org/uniprot/?query=%28annotation%3A%28%28type%3Afunction+%22ubiquitin-protein+ligase+complex%22%29+OR+%28type%3Afunction+%22ubiquitin+ligase+complex%22%29+OR+%28type%3Afunction+%22e3+protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin-protein+ligase%22%29+OR+%28type%3Asubunit+%22ubiquitin+ligase+complex%22%29%29+OR+name%3A%22ubiquitin-protein+ligase%22%29+AND+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22+AND+proteome%3Aup000005640&format=tab&columns=id,entry+name,reviewed,protein+names,genes'
+        #full_url = 'https://www.uniprot.org/uniprotkb?query=(reviewed:true)%20AND%20(organism_id:9606)'
+        full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_names%2Corganism_name%2Creviewed%2Cgo%2Cgo_f&format=tsv&query=%28%28reviewed%3Atrue%29%20AND%20%28organism_id%3A9606%29%20AND%20%28proteome%3AUP000005640%29%20AND%20%28go%3A0061630%29%20AND%20%28go%3A0000151%29%29'
+        
         from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
         Uniprot_human_ubi_ligases = Antibody_buckets.make_request(full_url, data=None)
         Uniprot_human_ubi_ligases = [x.split('\t') for x in Uniprot_human_ubi_ligases.split('\n')]
         human_ubi_ligases = pd.DataFrame(Uniprot_human_ubi_ligases[1:], columns=Uniprot_human_ubi_ligases[0])
         human_ubi_ligases.rename(columns={'Entry': 'accession'}, inplace=True)
         # only keep row when 'Entry name' is available (discard NAN row)
-        human_ubi_ligases = human_ubi_ligases.loc[human_ubi_ligases['Entry name'].notna()]
+        human_ubi_ligases = human_ubi_ligases.loc[human_ubi_ligases['Entry Name'].notna()]
 #        # create 'gene_name' column (using first entry in 'Gene names')
 #        human_ubi_ligases['gene_name'] = human_ubi_ligases['Gene names'].str.split(" ",expand=True)[0]
 #        # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
@@ -865,7 +872,9 @@ class Protac_buckets(object):
 
         print("\t- Assessing UniProt ubiquitination indication bucket 5...")
 
-        full_url = 'https://legacy.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
+        #full_url = 'https://legacy.uniprot.org/uniprot/?query=keyword%3A%22Ubl+conjugation+%5BKW-0832%5D%22+organism%3A%22Homo+sapiens+%28Human%29+%5B9606%5D%22&format=tab&columns=id,comment(PTM),feature(CROSS%20LINK)' #,database(PhosphoSitePlus)
+        #full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Creviewed%2Cid%2Cprotein_name%2Cgene_names%2Corganism_name%2Clength%2Cxref_chembl%2Cxref_drugbank%2Cxref_bindingdb%2Cxref_pdb%2Cft_crosslnk&format=tsv&query=%28%28keyword%3AKW-0832%29%29%20AND%20%28model_organism%3A9606%29&sort=organism_name%20asc'
+        full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cgene_names%2Ccc_ptm%2Cft_crosslnk%2Ccomment_count%2Corganism_name&format=tsv&query=%28%28keyword%3AKW-0832%29%29%20AND%20%28model_organism%3A9606%29&sort=organism_name%20asc'
         
         from ot_tractability_pipeline_v2.buckets_ab import Antibody_buckets
         Uniprot_ubl_conjugation = Antibody_buckets.make_request(full_url, data=None)
