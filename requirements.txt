@@ -1,6 +1,6 @@
 certifi
 chardet==3.0.4
-idna==2.8
+idna==3.7
 mygene
 numpy>=1.14.3
 pandas>=1.0.1
