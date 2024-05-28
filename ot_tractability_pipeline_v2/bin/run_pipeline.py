@@ -127,17 +127,20 @@ class Pipeline_setup(object):
         print("\t- Getting human proteome data from UniProt...")
         #full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE)'
         # github url now #full_url = 'https://legacy.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
-        full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c&format=tsv&query=%28proteome:UP000005640%29'
-
+        #full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c&format=tsv&query=%28proteome:UP000005640%29'
+        #full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cft_transmem%2Ccc_subcellular_location%2Cgo_c%2Cxref_bindingdb%2Cxref_chembl%2Cxref_drugbank%2Cxref_pdb%2Cxref_pharmgkb%2Cxref_pharos%2Creviewed&format=tsv&query=%28ENSG00000068024%29'
+        full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c%2Creviewed&format=tsv&query=%28proteome:UP000005640%29'
+        
         Uniprot_human_proteome = self.make_request(full_url, data=None)
         Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
         human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
-        
+        human_proteome.query(" `Entry Name` == `Entry Name` & `Reviewed` == 'reviewed' & Entry.str.len() < 7 ", inplace = True)
+        human_proteome = human_proteome.drop(columns = ['Reviewed'])
         
         if not human_proteome.empty:
             
             # only keep row when 'Entry name' is available (discard NAN row)
-            human_proteome = human_proteome.loc[human_proteome['Entry Name'].notna()]
+            #human_proteome = human_proteome.loc[human_proteome['Entry Name'].notna()]
         
             # rename columns
             #human_proteome = human_proteome.rename({'Entry': 'accession', 'Gene names  (primary )': 'gene_name', 'Gene names  (synonym )': 'gene_name_synonyms'}, axis = 1)
