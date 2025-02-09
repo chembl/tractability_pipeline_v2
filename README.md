@@ -129,7 +129,7 @@ Bucket 3 (-) Targets with PROTAC in clinical phase 1
 Bucket 4 (Europe PMC) Targets mentioned in PROTAC literature (manually curated) + additional information via automated assessments
 Bucket 5 (UniProt) Targets with UniProt keyword: "Ubl conjugation [KW-0832]"  
 Bucket 6 (PhosphoSitePlus, mUbiSiDa, Kim et al. 2011) Targets with reported ubiquitination sites in PhosphoSitePlus, mUbiSiDa (2013), or [Kim et al. 2011](https://www.sciencedirect.com/science/article/pii/S1097276511006757)  
-Bucket 7 ([Mathieson et al. 2018](https://www.nature.com/articles/s41467-018-03106-1)) Targets with available half-life data  
+Bucket 7 ([Mathieson et al. 2018](https://www.nature.com/articles/s41467-018-03106-1) and [Rolfs et al. 2021](https://www.nature.com/articles/s41467-021-26842-3)) Targets with available half-life data  
 Bucket 8 (ChEMBL) Targets with SM in ChEMBL with activity on target-based assay (pChEMBL ≥5) 
 
 PROTAC_location_Bucket  
@@ -234,7 +234,7 @@ Column 'Uniprot_PTM' contains additional information on posttranslational modifi
 Column 'Uniprot_CrossLink' contains additional information on crosslinks from UniProt and is not associated with a bucket.  
 Columns 'Ub_PhosphoSitePlus', 'Ub_mUbiSiDa_2013' and 'number_of_ubiquitination_sites' relate to bucket 6 and represent information available 
 from the two databases PhosphoSitePlus and mUbiSiDa and the dataset from Kim et al., respectively.  
-Columns 'Max_halflife' and 'Min_halflife' contain the max/min values of half-life data means measured in different cell types from Mathieson et al. and provides more detail to bucket 7 assessment. 
+Columns 'Max_halflife' and 'Min_halflife' contain the max/min values of half-life data means measured in different cell types from Mathieson et al. and Rolfs et al. and provides more detail to bucket 7 assessment. 
 The available data is provided in columns 'Bcell_mean', 'NKcell_mean', 'Hepatocytes_mean', 'MouseNeuorons_mean'.  
 Column 'count_compound_chembl_ids_PROTAC' contains the number of compounds found in ChEMBL related to bucket 8.
 

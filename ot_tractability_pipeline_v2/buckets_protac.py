@@ -1000,9 +1000,60 @@ class Protac_buckets(object):
         self.out_df['Bucket_7_PROTAC'] = 0
         # self.out_df['Bucket_x_PROTAC'] = 0
 
+        # read halflife data from mathieson
         df = pd.read_csv(os.path.join(DATA_PATH, 'protein_half_life_hq.csv'))
 
         df = df.merge(self.out_df, right_on='symbol', left_on='gene_name', how='right')
+
+        # read halflife data from rolfs
+        if os.path.isfile(os.path.join(DATA_PATH, 'protein_half_life_rolfs2021_processed.csv')):
+            df_rolfs = pd.read_csv(os.path.join(DATA_PATH, 'protein_half_life_rolfs2021_processed.csv'))
+        else:
+            dfs_rolfs = []
+            tissue_dict = {
+                'AC': 'Arytenoid Cartilage', 'Blood': 'Blood', 'CC': 'Cricoid Cartilage', 'Liver': 'Liver',
+                'LM': 'Laryngeal Muscle', 'SM': 'Sternocleidomastoid Muscle', 'TC': 'Thyroid Cartilage',
+                'VF': 'Vocal Fold Mucosa'
+            }
+            rolfs_data = os.path.join(DATA_PATH, 'protein_half_life_rolfs2021')
+            for file in os.listdir(rolfs_data):
+                temp = pd.read_csv(os.path.join(rolfs_data, file), sep='\t')
+                temp["Tissue"] = tissue_dict.get(file.partition("_")[0])
+                dfs_rolfs.append(temp)
+            df_rolfs = pd.concat(dfs_rolfs, ignore_index=True)
+            # split Protein (complexes) on ; and duplicate rows
+            df_rolfs = df_rolfs.assign(Protein=df_rolfs['Protein'].str.split(';')).explode('Protein')
+
+            # get mouse mapping file from MGI
+            mouse_map = urllib2.urlopen("https://www.informatics.jax.org/downloads/reports/HOM_MouseHumanSequence.rpt").readlines()
+            mouse_map = [x.decode('utf-8').strip('\n').split('\t') for x in mouse_map]
+            mouse_map = pd.DataFrame(mouse_map[1:], columns=mouse_map[0])
+            # get Symbol from mouse mapping
+            df_rolfs = df_rolfs.merge(mouse_map, left_on='Protein', right_on='SWISS_PROT IDs', how='left')
+            df_rolfs['Symbol'] = df_rolfs['Symbol'].str.upper()
+            # aggregate tissues and take min and max respectively
+            df_rolfs = df_rolfs.groupby('Symbol').agg(
+                {'LowerConfidenceInterval': 'min', 'UpperConfidenceInterval': 'max',
+                 'Tissue': lambda x: '|'.join(sorted((set(x))))}
+            )[['LowerConfidenceInterval', 'UpperConfidenceInterval', 'Tissue']].reset_index()
+            # rename columns
+            df_rolfs.rename(
+                columns={'LowerConfidenceInterval': 'Min_halflife', 'UpperConfidenceInterval': 'Max_halflife',
+                         'Tissue': 'Tissue_rolfs'},
+                inplace=True
+            )
+            # convert from days to hours
+            df_rolfs['Min_halflife'] = df_rolfs['Min_halflife'] * 24
+            df_rolfs['Max_halflife'] = df_rolfs['Max_halflife'] * 24
+            df_rolfs.to_csv(os.path.join(DATA_PATH, 'protein_half_life_rolfs2021_processed.csv'), index=False)
+
+        df = df.merge(df_rolfs, left_on='symbol', right_on='Symbol', how='left')
+        # take min and max from both sources and avoid SettingWithCopyWarning
+        df = df.assign(
+            Min_halflife=df[['Min_halflife_x', 'Min_halflife_y']].min(axis=1),
+            Max_halflife=df[['Max_halflife_x', 'Max_halflife_y']].max(axis=1))
+        df.drop(columns=['Min_halflife_x', 'Min_halflife_y', 'Max_halflife_x', 'Max_halflife_y'], inplace=True)
+
         df = df.groupby('ensembl_gene_id', as_index=False).max(numeric_only=True)
         df['Max_halflife'].fillna(-1, inplace=True)
         df['Min_halflife'].fillna(-1, inplace=True)
