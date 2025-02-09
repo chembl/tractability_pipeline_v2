@@ -25,6 +25,8 @@ import ast
 # from sqlalchemy import create_engine
 
 import requests
+import psutil
+import gc
 
 PY3 = sys.version > '3'
 if PY3:
@@ -587,15 +589,12 @@ class Protac_buckets(object):
 
         # keep only tagged_annotations from Abstract of publications
         tagged_annotations = tagged_annotations.loc[tagged_annotations['section'].astype(str).str.contains('Abstract')]
-        
         tagged_annotations['EuropePMC_accession'] = tagged_annotations.apply(self._extract_uniprot, axis=1)
-        
         tagged_annotations['short_id'] = tagged_annotations.apply(self._extract_id, axis=1)
-        
         tagged_annotations.rename(columns={'id':'link_id'}, inplace=True)
         
         # join tagged_annotations with self.papers_df
-        joined = tagged_annotations.merge(self.papers_df, left_on='short_id', right_on='id', how='inner')
+        joined = tagged_annotations.merge(self.papers_df, left_on='short_id', right_on='id', how='inner').rename(columns={'short_id_x':'short_id'})
         # convert name and protein_name to lowercase for merging 
         #(to avoid missing through different uppercase usage in text)
         joined['name_lower'] = joined['name'].str.lower()
@@ -603,32 +602,73 @@ class Protac_buckets(object):
         # 2) ---
         print("\t\t\t  2) Getting the human proteome from Uniprot in order to recover more mappings by 'symbol', 'gene_name' and 'protein_name'...")
         #human_proteome = self._get_human_proteome()
-        human_proteome = self.human_proteome
+        #human_proteome = self.human_proteome
+        if hasattr(self, 'human_proteome'):
+            human_proteome = self.human_proteome
+        else:
+            # If not set, fetch it
+            human_proteome = self._get_human_proteome()
+        # Ensure only necessary columns are kept
+        #human_proteome = human_proteome[['accession', 'symbol', 'gene_name', 'protein_name']]
+
         # Join on human_proteome data to get human UniProt accession IDs:
         # 1. join with human_proteome on 'symbol' (higher chances of getting the correct/dominant isoform)
         # 2. join with human_proteome on 'gene_name' (occurs several times, for all isoforms)
         # 3. join both new datasets
+        
         tagged_targets_on_symbol = joined.merge(human_proteome, left_on='name', right_on='symbol', how='left')
         tagged_targets_on_gene_name = joined.merge(human_proteome, left_on='name', right_on='gene_name', how='left')
         tagged_targets_df = tagged_targets_on_symbol.merge(tagged_targets_on_gene_name[['name','accession','gene_name']], on='name', how='inner')
+
         # 4. join with human_proteome on 'protein_name_lower' (to get full name annotations) = third new dataset 'tagged_targets_on_protein_name'
         # 5. join tagged_targets_df with third new dataset 'tagged_targets_on_protein_name' using lowercase names
         tagged_targets_on_protein_name = joined.merge(human_proteome, left_on='name_lower', right_on='protein_name_lower', how='left')
         tagged_targets_df = tagged_targets_df.merge(tagged_targets_on_protein_name[['name','accession','protein_name']], on='name', how='left')
+
         # 6. remove duplicated rows (keep='first' is default)
-        tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.drop_duplicates(subset=['exact', 'link_id']).index]
-        # As lists are contained in df: [convert the df to str type astype(str),] drop duplicates and then select the rows from original df, thus output df still contains lists        
-        print("\t\t\t  Checkpoint 3") 
+        #print("\t\t\t  Checkpoint")
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.drop_duplicates(subset=['exact', 'link_id']).index]
-        print("\t\t\t  Checkpoint 0") 
+        
+        chunk_size = 10000  # Adjust based on your system's capacity
+        chunks = [tagged_targets_df[i:i+chunk_size] for i in range(0, len(tagged_targets_df), chunk_size)]
+        processed_chunks = []
+
+        for chunk in chunks:
+            chunk = chunk.drop_duplicates(subset=['exact', 'link_id'])
+            processed_chunks.append(chunk)
+        
+        tagged_targets_df = pd.concat(processed_chunks, ignore_index=True)
+        
+        # Monitor swap usage
+        swap = psutil.swap_memory()
+ 
+        if swap.percent > 50:  # If swap usage exceeds 50%
+            print("\t\t\t   High swap usage detected. Freeing memory...")
+
+            # Delete large DataFrames
+            del joined
+            del tagged_targets_on_symbol
+            del tagged_targets_on_gene_name
+            del tagged_targets_on_protein_name
+
+            # Explicitly collect garbage
+            gc.collect()
+    
+            # Print memory status again for confirmation
+            swap = psutil.swap_memory()
+            print(f"\t\t\t   Swap usage after cleanup: {swap.percent}%")
+            #print(f"\t\t  Swap usage after cleanup: {swap.percent}%")
+         
+        # As lists are contained in df: [convert the df to str type astype(str),] drop duplicates and then select the rows from original df, thus output df still contains lists        
+        #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.drop_duplicates(subset=['exact', 'link_id']).index]
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]        
         # 7. rename last joined accession column to "accession_z"
         tagged_targets_df.rename(columns={"accession": "accession_z"}, inplace=True)
-        print("\t\t\t  Checkpoint 1")        
         # 8. add additional mapping 'accession_z2' column based on protein name from publication matching end of UniProts full protein name
-        print("\t\t\t  Checkpoint 2")
-        tagged_targets_df['accession_z2'] = ''
+        tagged_targets_df['accession_z2'] = np.nan  # Initialize the new column
         tagged_targets_df['accession_z2'] = tagged_targets_df['name'].str.lower().apply(lambda x: human_proteome[human_proteome['protein_name_lower'].str.endswith(x)]['accession'].any(0))
+        # tagged_targets_df['accession_z2'] = ''
+        # Replace False with NaN
         tagged_targets_df['accession_z2'].replace(to_replace=False, value=np.nan, inplace=True)        
         # as new 'accession' column take 'accession_x' (from tagged_targets_on_symbol)
         # if 'accession_x' (from tagged_targets_on_symbol) is NA, take 'accession_y' (from tagged_targets_on_gene_name)
@@ -641,13 +681,13 @@ class Protac_buckets(object):
         tagged_targets_df['accession'] = tagged_targets_df['accession'].fillna(value=tagged_targets_df['EuropePMC_accession'])
 
         # safe human_proteome into global variable for later use in other buckets
-        #self.human_proteome = human_proteome[['accession','symbol','gene_name','protein_name']]
+        # self.human_proteome = human_proteome[['accession','symbol','gene_name','protein_name']]
 
         if self.store_fetched: 
             tagged_targets_df.to_csv("{}/protac_pmc_tagged_targets_raw.csv".format(self.store_fetched), encoding='utf-8')
-        
         tagged_targets_df.rename(columns = {'id':'pub_id'}, inplace = True)
 #        return joined[['accession', 'prefix', 'exact', 'postfix', 'section', 'full_id', 'journalTitle', 'title']]
+
         return tagged_targets_df[['accession', 'name', 'exact', 'pub_id', 'short_id', 'full_id', 'section', 'title', 
                                   'abstractText', 'NER_PROTAC_label_title', 'NER_PROTAC_label_abstract']] #, 'sentences', 'sentence_count'
 
@@ -664,9 +704,7 @@ class Protac_buckets(object):
         def set_strings(x):
             ''' concatenate in string and include only if it is a string (not nan), and exists '''
             return ", ".join([y for y in x if isinstance(y,str) and y])
-        
         f0 = {x: set_strings for x in tagged_targets_links.columns if x not in ['accession','full_id']}
-        
         tagged_targets_links = tagged_targets_links.groupby(['full_id','accession'], as_index=False).agg(f0).reset_index(drop=True)
         tagged_targets_links.rename(columns = {'exact':'exact_terms'}, inplace = True)
         
@@ -744,12 +782,17 @@ class Protac_buckets(object):
 #        print("Loading SpaCy model for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE' from", model_dir)
 #        nlp2 = spacy.load(model_dir)
         print("\t\t  Loading custom SpaCy model 'en_NER_PROTAC' for Named Entity Recognition of 'PROTAC_TARGET', 'PROTAC_NAME', and 'E3_LIGASE'")
-        nlp2 = spacy.load(r'en_NER_PROTAC')
-        
+        #nlp2 = spacy.load(r'en_NER_PROTAC')
+        # Load the SpaCy model with optimizations
+        nlp2 = spacy.load("en_NER_PROTAC", disable=["parser"])
+        nlp2.max_length = 5000000  # Adjust if needed      
+
         print("\t\t  Performing Named Entity Recognition on publication titles and abstracts...")
         def predict_abstracts(textcol):
-            docx = nlp2(textcol)
-            pred = [(ent.label_, ent.text) for ent in docx.ents]
+            #docx = nlp2(textcol)
+            #pred = [(ent.label_, ent.text) for ent in docx.ents]
+            docs = list(nlp2.pipe(textcol, batch_size=50))  # Process in batches
+            pred = [(ent.label_, ent.text) for doc in docs for ent in doc.ents]
             return pred
                 
         self.papers_df['NER_PROTAC_label_title'] = self.papers_df['abstractText'].map(predict_abstracts)
@@ -769,6 +812,7 @@ class Protac_buckets(object):
         print("\t\t  Performing protein ID mapping via EuropePMC annotations and UniProt...")
         tagged_targets_df = self._process_IDs()
         
+        print("\t\t  Cleaning data...")
         tagged_targets_df = tagged_targets_df.drop_duplicates(['accession','full_id'], ignore_index=True)
         #tagged_targets_df = tagged_targets_df.loc[tagged_targets_df.astype(str).drop_duplicates().index]
 
