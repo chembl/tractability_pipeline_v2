@@ -593,7 +593,8 @@ class Antibody_buckets(object):
         print("\t- Assessing Human Protein Atlas main location bucket 9...")
 
         # Download latest file
-        zip_file = urllib2.urlopen('https://www.proteinatlas.org/download/subcellular_location.tsv.zip')
+        #zip_file = urllib2.urlopen('https://www.proteinatlas.org/download/subcellular_location.tsv.zip')
+        zip_file = urllib2.urlopen('https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip')
         with zipfile.ZipFile(io.BytesIO(zip_file.read()), 'r') as pa_file:
             with pa_file.open('subcellular_location.tsv') as subcell_loc:
                 df = pd.read_csv(subcell_loc, sep='\t', header=0)
