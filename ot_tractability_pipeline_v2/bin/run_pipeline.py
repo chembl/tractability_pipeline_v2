@@ -28,6 +28,10 @@ import ast
 from xml.etree import ElementTree
 from urllib.parse import urlparse, parse_qs, urlencode
 from requests.adapters import HTTPAdapter, Retry
+from tqdm import tqdm
+import threading
+import psutil
+import gc
 
 PY3 = sys.version > '3'
 if PY3:
@@ -102,21 +106,59 @@ class Pipeline_setup(object):
             3) Use the command line flag '--db' if using the supplied run script  '''
                   )
             raise
-                    
-    @staticmethod
-    def make_request(url, data):
-        request = urllib2.Request(url)
-        try:
-            url_file = urllib2.urlopen(request, data)
-        except urllib2.HTTPError as e:
-            if e.code == 404:
-                print("[NOTFOUND %d] %s" % (e.code, url))
-            else:
-                print("[ERROR %d] %s" % (e.code, url))
-            return None
-        return url_file.read().decode()
 
+        # Start the keep-alive thread
+        self.keep_alive_interval = 60  # Send a keep-alive every 60 seconds
+        self.keep_alive_thread = threading.Thread(target=self._keep_alive, daemon=True)
+        self.keep_alive_thread.start()
+
+    def _keep_alive(self):
+        while True:
+            # Perform a simple query to keep the connection alive
+            try:
+                self.engine.execute("SELECT SYSDATE FROM DUAL")
+            except Exception as e:
+                print(f"Connection lost, attempting to reconnect: {e}")
+                # You may want to reinitialize the engine here if the connection is lost
+                self.engine = create_engine(database_url)
+            time.sleep(self.keep_alive_interval)
+                    
+    #@staticmethod
+    #def make_request(url, data):
+    #    request = urllib2.Request(url)
+    #    try:
+    #        url_file = urllib2.urlopen(request, data)
+    #    except urllib2.HTTPError as e:
+    #        if e.code == 404:
+    #            print("[NOTFOUND %d] %s" % (e.code, url))
+    #        else:
+    #            print("[ERROR %d] %s" % (e.code, url))
+    #        return None
+    #    return url_file.read().decode()
+
+    #@staticmethod
+    #def make_request(url):
+    #    response = requests.get(url)
+    #    response.raise_for_status()  # Raises an error for bad requests (4xx or 5xx)
+    #     
+    #    return response.text
     
+    @staticmethod
+    def make_request(url, data=None):
+        try:
+            if data:
+                response = requests.post(url, data=data)
+            else:
+                response = requests.get(url)
+
+            response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx, 5xx)
+            return response
+        except requests.exceptions.HTTPError as err:
+            print(f"HTTP error occurred: {err}")
+        except Exception as err:
+            print(f"Other error occurred: {err}")
+        return None            
+
     def _get_human_proteome(self):
         '''
         Getting the human proteome from UniProt 
@@ -125,17 +167,72 @@ class Pipeline_setup(object):
         Processing entry, gene, and protein names.
         '''
         print("\t- Getting human proteome data from UniProt...")
-        #full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE)'
-        # github url now #full_url = 'https://legacy.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
-        #full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c&format=tsv&query=%28proteome:UP000005640%29'
-        #full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cft_transmem%2Ccc_subcellular_location%2Cgo_c%2Cxref_bindingdb%2Cxref_chembl%2Cxref_drugbank%2Cxref_pdb%2Cxref_pharmgkb%2Cxref_pharos%2Creviewed&format=tsv&query=%28ENSG00000068024%29'
-        full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c%2Creviewed&format=tsv&query=%28proteome:UP000005640%29'
+	
+	# full_url = 'https://www.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE)'
+	# github url now #full_url = 'https://legacy.uniprot.org/uniprot/?query=proteome:UP000005640&format=tab&columns=id,entry%20name,protein%20names,genes(PREFERRED),genes(ALTERNATIVE),database(GeneID),database(ChEMBL),database(BindingDB),database(DrugBank),database(PharmGKB),database(Pharos),database(PDB),comment(SUBCELLULAR%20LOCATION),feature(TRANSMEMBRANE),feature(SIGNAL),go(cellular%20component)'
+	# full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c&format=tsv&query=%28proteome:UP000005640%29'
+	# full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cft_transmem%2Ccc_subcellular_location%2Cgo_c%2Cxref_bindingdb%2Cxref_chembl%2Cxref_drugbank%2Cxref_pdb%2Cxref_pharmgkb%2Cxref_pharos%2Creviewed&format=tsv&query=%28ENSG00000068024%29'
+	# full_url = 'https://rest.uniprot.org/uniprotkb/stream?fields=accession%2Cid%2Cprotein_name%2Cgene_primary%2Cgene_synonym%2Cxref_geneid%2Cxref_chembl%2Cxref_bindingdb%2Cxref_drugbank%2Cxref_pharmgkb%2Cxref_pharos%2Cxref_pdb%2Ccc_subcellular_location%2Cft_transmem%2Cft_signal%2Cgo_c%2Creviewed&format=tsv&query=%28proteome:UP000005640%29'
+
+        # Initialize the base URL and parameters for the API request
+        base_url = 'https://rest.uniprot.org/uniprotkb/search'
+        fields = 'accession,id,protein_name,gene_primary,gene_synonym,xref_geneid,ft_transmem,ft_signal,cc_subcellular_location,go_c,xref_bindingdb,xref_chembl,xref_drugbank,xref_pdb,xref_pharmgkb,xref_pharos,reviewed'
+        query = 'UP000005640'
+        size = 500  # Number of results per page
+        full_url = f"{base_url}?query=({query})&fields={fields}&format=tsv&size={size}"
+
+        # Data container for all results
+        all_results = []
+	
+	# Make the first request
+        response = self.make_request(full_url, None) # Pass None for data
+        #response_text = self.make_request(full_url)
+        #response_text = make_request(full_url)
+        #all_results.append(response_text)
+        #all_results.append(response)
+	
+        if response:
+            all_results.append(response.text)
+        # Check for pagination and use tqdm for progress
+        page_num = 1
+        while True:
+            link_header = response.headers.get('Link') # Get the 'Link' header for pagination
+            #link_header = response_text.split('\n')[-1]
+            
+            if link_header and 'rel="next"' in link_header:
+                #if 'next' in link_header:
+                # Extract the next page URL from the 'Link' header 
+                next_page_url = link_header.split(';')[0].strip('<>')
         
-        Uniprot_human_proteome = self.make_request(full_url, data=None)
+                # Make the next request
+                response = self.make_request(next_page_url, None)
+                #response_text = self.make_request(next_page_url)
+                #response_text = make_request(next_page_url)
+                #all_results.append(response_text)
+                #all_results.append(response)
+                if response:
+                    all_results.append(response.text)
+                
+                page_num +=1
+                tqdm.write(f"Processing page {page_num}...")  # Show progress for each page
+            else:
+		# No more pages
+                break
+	
+	# Combine all results into a single string and split into rows
+        Uniprot_human_proteome = '\n'.join(all_results)
+	
+	#Uniprot_human_proteome = self.make_request(full_url, data=None)
         Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
         human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
         human_proteome.query(" `Entry Name` == `Entry Name` & `Reviewed` == 'reviewed' & Entry.str.len() < 7 ", inplace = True)
         human_proteome = human_proteome.drop(columns = ['Reviewed'])
+        
+        #Uniprot_human_proteome = self.make_request(full_url, data=None)
+        #Uniprot_human_proteome = [x.split('\t') for x in Uniprot_human_proteome.split('\n')]
+        #human_proteome = pd.DataFrame(Uniprot_human_proteome[1:], columns=Uniprot_human_proteome[0])
+        #human_proteome.query(" `Entry Name` == `Entry Name` & `Reviewed` == 'reviewed' & Entry.str.len() < 7 ", inplace = True)
+        #human_proteome = human_proteome.drop(columns = ['Reviewed'])
         
         if not human_proteome.empty:
             
@@ -158,8 +255,8 @@ class Pipeline_setup(object):
             # as all protein isoforms have different UniProt IDs, only the first occurence of gene_name is kept 
             # (which should be the primary UniProtID) count: 20487
             human_proteome.drop_duplicates(subset="gene_name", keep='first', inplace=True)
+            self.human_proteome = human_proteome  # Store the result in the instance attribute
             
-        
         #self.human_proteome = human_proteome
         return human_proteome
 
@@ -169,7 +266,14 @@ class Pipeline_setup(object):
         Mapping UniProt accessions to Ensembl gene IDs (see https://www.uniprot.org/help/id_mapping)
         '''
         print("\t- Mapping UniProt accessions to Ensembl gene IDs...")
-        human_proteome = self._get_human_proteome()
+        #human_proteome = self._get_human_proteome()
+        # Use self.human_proteome if already set elsewhere
+        if hasattr(self, 'human_proteome'):
+            human_proteome = self.human_proteome
+        else:
+            # If not set, fetch it
+            human_proteome = self._get_human_proteome()
+        
         ids = human_proteome['accession'].to_list()
         #ids = ' ,'.join(self.human_proteome['accession'].to_list())
         
@@ -392,7 +496,6 @@ class Pipeline_setup(object):
                 continue
         return go_terms_list
 
-        
     def _add_MyGene_columns(self):
         '''
         Use MyGene to find uniprot accession, entrezgene, pdb, pfam, GO and interpro IDs associated to each Ensembl gene ID.
@@ -451,7 +554,7 @@ class Pipeline_setup(object):
         # Concatenate protein and target dataframes (excluding column 'name' from target):
         result = pd.concat([protein, target.drop('name', axis=1)], axis=1, join='outer')
         result.drop_duplicates(subset="uniprot", keep='first', inplace=True)
-        # added columns are: name, description, uniprot, sym	, family	, dtoclass, 	ttype, tdl, 	fam
+        # added columns are: name, description, uniprot, sym	, family	, dtoclass,	ttype, tdl,	fam
         result.rename(columns={'family': 'IDG_family', 
                                'dtoclass': 'IDG_dtoclass', 
                                'ttype': 'IDG_ttype', 
